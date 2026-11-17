@@ -23,10 +23,10 @@ The selector must **actually write** `0x1512`; dashboard-only changes do not mod
 
 An early dashboard applied `C*9/5+32` to a value already in Fahrenheit. **Do not convert a second time.** In this project, the controller handles the temperature unit; the dashboard displays the controller's numerical reading and a unit label derived from readback. If readings still disagree, inspect the raw values of `0x1508`, `0x1509`, `0x1512`.
 
-## Load switch does not work
+## Load output toggle or Load Mode dropdown does not work
 
-- Verify Modbus **function `0x10`** (FC16) with **count 1** writing `0x1513` to `0x13FC` (ON) or `0x13FD` (OFF).
-- Read `0x1514` for actual load state. Do not equate `0x1513` mode with proof of load power.
+- Verify Modbus **function `0x10`** (FC16) with **count 1** writing `0x1513`: `0x13FC` On, `0x13FD` Off, `0x13EC` Exclusive Light Control, `0x13ED` Shut down load in 1h, `0x13EE` Shut down load in 2h.
+- The dropdown reflects the mode returned by `0x1513`. Read `0x1514` for actual output state/toggle, especially in light or timed modes. Do not equate `0x1513` mode with proof of load power.
 - Check logs for Modbus ACK and whether a polling/battery configuration operation is holding the serial bus.
 - The `0x1513` command is **load output**, **not the charging ON/OFF switch**.
 
