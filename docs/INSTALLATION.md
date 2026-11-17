@@ -1,66 +1,58 @@
-# Installation and configuration
+# Installation — ECO-WORTHY MPPT-only package
 
-This guide accompanies [the README](../README.md), [the ESPHome configuration](../esphome/ecoworthy-mppt.yaml), and the [Home Assistant dashboard](../homeassistant/dashboard.yaml). It describes **the specific active-master ESP32-S3 installation**; other controllers and firmware may differ.
+This release intentionally contains **no JK BMS support, BLE clients, or battery-bank calculations**. The controller's own battery voltage, charging and SOC measurements remain available.
 
-## Dependencies checklist
+## Required dependencies
 
-| Dependency | Why required |
-|---|---|
-| ECO-WORTHY MPPT 60 A with observed RS485 port | Modbus RTU device, slave ID 1 in captured traffic |
-| ESP32-S3 supported by ESPHome | Runs the provided active-master firmware |
-| Suitable 3.3 V RS485 transceiver, wiring and power | Connects controller RS485 bus to ESP32 UART; controller connector wiring must be independently verified |
-| Wi-Fi and ESPHome builder | Firmware configuration, build and OTA |
-| Home Assistant + native ESPHome integration | Publishes controller and JK BMS entities |
-| `syssi/esphome-jk-bms` external component | Required by supplied two-JK-BMS BLE configuration; ESPHome fetches it from Git |
-| Two JK BMS BLE devices with their MACs | **Needed only if retaining the included JK sections** |
-| HACS or manual frontend resource installation | Install card-mod, ApexCharts Card, Tabbed Card |
-| card-mod | Settings layout, style overrides, `custom:mod-card` |
-| ApexCharts Card | `custom:apexcharts-card` historical energy plots |
-| Tabbed Card | `custom:tabbed-card` Month/Year selector |
+| Item | Requirement |
+| --- | --- |
+| Charger | ECO-WORTHY MPPT **60A** with tested RS485 Modbus RTU behavior; 40A untested |
+| Controller host | **ESP32-S3** for the supplied example; other ESPHome-compatible hosts may work with a separate port |
+| RS485 hardware | 3.3V logic-compatible UART-to-RS485 transceiver, correctly wired to the charger |
+| Network | Wi-Fi with ESP32-S3 example; an Ethernet-capable host is a possible alternative |
+| Firmware environment | ESPHome (ESP32-S3 Arduino framework in the example); Git accessible at configuration/build time |
+| HA integration | Built-in Home Assistant ESPHome integration |
+| Dashboard frontend | **card-mod**, **ApexCharts Card**, **Tabbed Card**; install via HACS or manually |
 
-Check that your ESPHome version can build the installed JK BMS external component. This configuration has not been independently compiled in a clean GitHub CI build.
+**Not required:** `syssi/esphome-jk-bms`, any JK BMS device or MAC address, ESP32 BLE tracker/client, external BMS library, HACS backend integration.
 
 ## Wiring and bus ownership
 
-Configured ESP32-S3 GPIOs: RX=GPIO16, TX=GPIO17, DE/RE direction=GPIO18. Serial protocol observed: **115200 baud, 8N1**, Modbus RTU **slave ID 1**.
+The example uses ESP32 GPIO16 RX, GPIO17 TX, GPIO18 RS485 driver-enable direction, with RTU 115200 baud, 8N1 and device ID 1. Verify the exact charger socket pinout, A/B, reference ground and transceiver supply separately. These GPIO assignments are **not** a verified charger socket wiring diagram.
 
-The GPIO numbers are **ESP32-side assignments**, not a pinout for the charger socket. Verify transceiver power (3.3 V logic), polarity, ground, DE/RE wiring, cable termination, and actual charger connector pinout. Incorrect connections can damage equipment.
+**Unplug/isolate the OEM BT-02** before flashing the new active-master firmware or allowing polling/writes. Two simultaneous masters may collide.
 
-**Disconnect/isolate the original ECO-WORTHY BT-02 Modbus master** before allowing the ESPHome firmware to poll or write. The bus is not safe for two uncoordinated masters.
+## Install ESPHome
 
-## ESPHome installation (complete configuration)
-
-1. Make a backup of the existing device YAML, secrets and current controller battery settings.
-2. Copy `esphome/ecoworthy-mppt.yaml` into your ESPHome configuration directory (`/config/esphome/` on many HAOS installs).
-3. Edit `substitutions:` for your actual BLE MAC addresses. The provided `AA:BB:CC:DD:EE:01/02` are examples, **not real BMS addresses**. Adjust GPIOs, protocol version, device name or BLE sections as needed. If no JK BMS devices are present, remove JK BMS-related components, sensors, globals and other references; this is a project-specific configuration, not a JK-free turnkey profile.
-4. Add these keys to the **ESPHome** `secrets.yaml` and keep that file private:
+1. Back up your currently working ESPHome YAML, secrets, credentials and current controller battery settings.
+2. Copy [`examples/esp32-s3.yaml`](../examples/esp32-s3.yaml) to your ESPHome directory as `eco-worthy-mppt.yaml` (commonly `/config/esphome/`).
+3. The example imports [`esphome/ecoworthy-mppt-package.yaml`](../esphome/ecoworthy-mppt-package.yaml) with `packages:`. The package has **only MPPT components**. The host file defines the ESP32 board, Wi-Fi, API, OTA, logger and fallback AP.
+4. Update GPIO substitutions and the hostname as appropriate. Put these exact keys into the local **ESPHome `secrets.yaml`**:
 
    ```yaml
-   wifi_ssid2: "YOUR_SSID"
-   wifi_password2: "YOUR_PASSWORD"
-   JKBMS_API_KEY: "YOUR_BASE64_ESPHOME_API_ENCRYPTION_KEY"
-   JKBMS_OTA_PASSWORD: "YOUR_EXISTING_OR_NEW_OTA_PASSWORD"
-   fallbackAP_Password: "YOUR_STRONG_FALLBACK_PASSWORD"
+   wifi_ssid: "MY_WIFI"
+   wifi_password: "MY_PASSWORD"
+   mppt_api_key: "VALID_ESPHOME_API_ENCRYPTION_KEY"
+   mppt_ota_password: "MY_OTA_PASSWORD"
+   mppt_fallback_password: "MY_STRONG_FALLBACK_PASSWORD"
    ```
 
-   Generate the API key with ESPHome's supported key generator. Existing installations should preserve the original API/OTA secrets if updating the same device.
-5. Set the correct Wi-Fi network. If hostname discovery fails, add your own `wifi.use_address` (local IP/hostname) under `wifi:`; the originating installation IP was removed.
-6. Validate in ESPHome, compile, then flash via USB or your already-authorized OTA path. Review the logs for RS485 reads and Modbus CRC/acknowledgement failures before touching any control.
-7. Add/discover the device with **Settings → Devices & Services → ESPHome** and verify entities under **Developer Tools → States**. In this installation, entity IDs were prefixed `garage_modbus_bridge_`. HA may assign different IDs: update the dashboard references to match.
+   Generate a proper ESPHome API encryption key with ESPHome's UI/CLI, not by copying the placeholder. Preserve the previous device API/OTA credentials if reusing a provisioned device. Do **not** commit `secrets.yaml`.
+5. Disconnect the BT-02, verify RS485 hardware and choose the correct serial port. Validate your complete ESPHome configuration and compile **before flashing**. This refactor has received YAML structural and ID-reference checks, but **has not been compiled/hardware-tested in the released modular form**.
+6. Flash the ESP32-S3 and inspect UART logs for valid FC03 reads/CRC before trying any writes. In Home Assistant, add the device via **Settings → Devices & Services → ESPHome**.
+7. Verify sensor names and state changes. The HA dashboard was authored against `garage_modbus_bridge_` entities; your HA may generate a different prefix depending on the host's name/registry. Adjust dashboard entity IDs if necessary.
 
-## Home Assistant dashboard installation
+## Install Home Assistant dashboard
 
-1. In HACS, install these *Frontend* resources: [card-mod](https://github.com/thomasloven/lovelace-card-mod), [ApexCharts Card](https://github.com/RomRider/apexcharts-card), [Tabbed Card](https://github.com/kinghat/tabbed-card). Manual installs are also possible if you register resource URLs correctly. Refresh the browser after installing resources.
-2. Create a new dashboard with URL path **`eco-worthy-mppt-60a-charger`** and open its **Raw configuration editor**.
-3. Paste all of `homeassistant/dashboard.yaml`, save, then revisit the dashboard.
-4. Check the five views: **Readings**, **Settings**, **Configuration** (subview), **History**, **Diagnostics**.
-5. The battery-config gear navigation and cancel link use **`/eco-worthy-mppt-60a-charger/`**. If your dashboard slug differs, replace these paths in the YAML.
-6. If HA entities are not found, inspect a few live ESPHome entities and replace `garage_modbus_bridge_` with the actual prefix consistently.
-7. The Month/Year charts derive displayed dates from rolling 31-day/12-month slots and deliberately place **newest on the left**. This display mapping was validated by the original user; test controller rollover separately.
+1. Install [card-mod](https://github.com/thomasloven/lovelace-card-mod), [ApexCharts Card](https://github.com/RomRider/apexcharts-card) and [Tabbed Card](https://github.com/kinghat/tabbed-card) through HACS Frontend or manually. Register frontend resources and hard-refresh HA.
+2. Create a new dashboard with URL path `eco-worthy-mppt-60a-charger`.
+3. Paste [`homeassistant/dashboard.yaml`](../homeassistant/dashboard.yaml) using **Edit dashboard → Raw configuration editor**.
+4. Check all five views: Readings, Settings, Configuration, History and Diagnostics. The gear/Cancel links assume `/eco-worthy-mppt-60a-charger/`. Change these paths if you choose another slug.
+5. Verify load and temperature controls respond to the controller readback before changing battery limits. The history chart intentionally plots newest values at the left.
 
 ### Optional file-backed dashboard
 
-Copy `homeassistant/dashboard.yaml` to `/config/dashboards/ecoworthy-mppt.yaml` and merge into **existing** `configuration.yaml`:
+For `/config/dashboards/ecoworthy-mppt.yaml`, merge into HA's **existing** `configuration.yaml`:
 
 ```yaml
 lovelace:
@@ -73,36 +65,28 @@ lovelace:
       filename: dashboards/ecoworthy-mppt.yaml
 ```
 
-Ensure the dashboard key is a supported unique slug and that its filename is relative to HA's config directory. A file-backed dashboard is not automatically refreshed from GitHub; use a separate trusted checkout/sync process and reload the dashboard when needed.
+Home Assistant does **not** automatically sync a GitHub dashboard. Copy/sync the file yourself and reload the dashboard when updated.
 
-### Optional ESPHome Git package
+## Remote package and modularity
 
-ESPHome remote packages can load the YAML during ESPHome configuration processing:
+ESPHome `packages` can combine unrelated integrations from different files. Use the MPPT package from this repo and, if desired, a **separate** JK BMS package/configuration maintained independently. Do not add duplicate device boot settings (`esphome:`, `esp32:`, `api:`, `wifi:`) inside the MPPT package.
 
 ```yaml
 packages:
-  eco_worthy:
+  ecoworthy:
     url: https://github.com/xadonxander/ECO-Worthy-HomeAssistant-ESPHome
     ref: main
     files:
-      - esphome/ecoworthy-mppt.yaml
+      - esphome/ecoworthy-mppt-package.yaml
     refresh: 1d
-substitutions:
-  bms1_mac: "YOUR_REAL_BMS1_MAC"
-  bms2_mac: "YOUR_REAL_BMS2_MAC"
 ```
 
-For predictable and secure updates, pin `ref` to a reviewed release tag/commit rather than `main` and verify local overrides. ESPHome package refreshing **does not flash** a device. You must compile and install new firmware deliberately.
+Pin `ref` to a tested tag/commit when deploying to a live charger. Pulling an updated package does **not** flash a new build: compile and install explicitly. The MPPT package is not a standalone firmware; you must provide a supported host/device configuration.
 
-## Control operation
+## Protocol notes
 
-- **Load switch:** Writes a single value to holding register `0x1513` with Modbus function `0x10`; verifies status from `0x1514`.
-- **Temperature selector:** Requests `0x1512=0` for Celsius or `=1` for Fahrenheit, waits for the UART bus to be free, verifies acknowledgement and reads back the controller setting. The dashboard displays the returned temperature values and label **without a second conversion**.
-- **Battery configuration:** The Configuration subview edits draft values locally. **Save** writes ten contiguous holding registers `0x1515–0x151E` in one FC16 transaction. Do not press Save without double-checking battery chemistry/voltage/charge limits.
-- **History:** Read-only daily and monthly production registers.
+The package reads live registers `0x1500–0x1521` and history `0x1600–0x162A`, writes `0x1513` for load ON/OFF and `0x1512` for °C/°F, and writes `0x1515–0x151E` **only on explicit Battery Save**. See [MODBUS.md](MODBUS.md) before changing any write logic. A write success should be checked by RTU ACK **and fresh readback**.
 
-## Updates and rollback
+## Rollback / update safety
 
-- Commit and review changes on GitHub, back up current working files, validate/compile in ESPHome, then explicitly flash a known-good build.
-- Download/update the HA dashboard separately. Confirm the entity IDs and custom frontend cards.
-- Keep a prior known-good YAML/firmware backup for immediate rollback; do not automate unreviewed firmware flashes on a live solar charger.
+Keep a known-good copy of the original combined ESPHome firmware. Do **not** automatically flash a newly refactored package over the existing device until compilation and test reads succeed. Failure to load package/configuration must not trigger attempts to write settings. Test first on the bench where possible.
