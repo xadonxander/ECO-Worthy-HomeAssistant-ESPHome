@@ -1,0 +1,48 @@
+# ESP32-S3 host example for the standalone ECO-WORTHY MPPT package.
+# Copy this to /config/esphome/eco-worthy-mppt.yaml, then configure secrets.yaml.
+# The RP2350 is a potential alternative, but needs a separately tested host wrapper.
+#
+# CAUTION: active RS485 master; unplug the OEM BT-02 first.
+substitutions:
+  rs485_rx_pin: GPIO16
+  rs485_tx_pin: GPIO17
+  rs485_direction_pin: GPIO18
+
+esphome:
+  name: modbus-bridge
+  friendly_name: Modbus Bridge
+
+esp32:
+  board: esp32-s3-devkitc-1
+  framework:
+    type: arduino
+
+logger:
+  level: DEBUG
+
+api:
+  encryption:
+    key: !secret mppt_api_key
+
+ota:
+  - platform: esphome
+    password: !secret mppt_ota_password
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  ap:
+    ssid: MPPT-Bridge-Fallback
+    password: !secret mppt_fallback_password
+
+captive_portal:
+
+# Pin to a tested release tag / commit when available.
+# Refreshing packages does NOT automatically flash firmware.
+packages:
+  ecoworthy:
+    url: https://github.com/xadonxander/ECO-Worthy-HomeAssistant-ESPHome
+    ref: main
+    files:
+      - esphome/ecoworthy-mppt-package.yaml
+    refresh: 1d
