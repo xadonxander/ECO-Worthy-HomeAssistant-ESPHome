@@ -21,6 +21,8 @@ views:
     - entity: switch.garage_modbus_bridge_mppt_load_output
       name: Load
       icon: mdi:lightbulb
+    - entity: select.garage_modbus_bridge_mppt_load_mode
+      name: Load mode
     - entity: sensor.garage_modbus_bridge_mppt_load_voltage
     - entity: sensor.garage_modbus_bridge_mppt_load_current
     - entity: sensor.garage_modbus_bridge_mppt_load_power
