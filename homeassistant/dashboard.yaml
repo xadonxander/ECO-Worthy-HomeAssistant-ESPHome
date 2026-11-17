@@ -1,0 +1,469 @@
+title: ECO-WORTHY MPPT
+views:
+- title: Readings
+  path: readings
+  icon: mdi:solar-power
+  cards:
+  - type: entities
+    title: Solar and charging
+    show_header_toggle: false
+    entities:
+    - entity: sensor.garage_modbus_bridge_mppt_pv_voltage
+    - entity: sensor.garage_modbus_bridge_mppt_battery_voltage
+    - entity: sensor.garage_modbus_bridge_mppt_charging_current
+    - entity: sensor.garage_modbus_bridge_mppt_charging_power
+    - entity: sensor.garage_modbus_bridge_mppt_reported_soc
+    - entity: sensor.garage_modbus_bridge_mppt_total_generation
+  - type: entities
+    title: Load output
+    show_header_toggle: false
+    entities:
+    - entity: switch.garage_modbus_bridge_mppt_load_output
+      name: Load
+      icon: mdi:lightbulb
+    - entity: sensor.garage_modbus_bridge_mppt_load_voltage
+    - entity: sensor.garage_modbus_bridge_mppt_load_current
+    - entity: sensor.garage_modbus_bridge_mppt_load_power
+  - type: vertical-stack
+    cards:
+    - type: entities
+      title: Temperature
+      show_header_toggle: false
+      entities:
+      - entity: select.garage_modbus_bridge_mppt_draft_temperature_unit
+        name: Controller temperature unit
+    - type: markdown
+      content: "{% set unit = '°F' if is_state('select.garage_modbus_bridge_mppt_draft_temperature_unit', 'Fahrenheit')\
+        \ else '°C' %}\n{% for entity, label in [\n  ('sensor.garage_modbus_bridge_mppt_external_temperature', 'External\
+        \ temperature'),\n  ('sensor.garage_modbus_bridge_mppt_internal_temperature_probable', 'Internal temperature\
+        \ (probable)')\n] %}\n**{{ label }}:** {% set value = states(entity) %}{% if is_number(value) %}{{ value\
+        \ | float | round(1) }} {{ unit }}{% else %}{{ value }}{% endif %}  \n{% endfor %}"
+  - type: entities
+    title: Controller faults
+    show_header_toggle: false
+    entities:
+    - entity: binary_sensor.garage_modbus_bridge_mppt_battery_overvoltage_fault
+    - entity: binary_sensor.garage_modbus_bridge_mppt_battery_low_voltage_fault
+- title: Settings
+  path: settings
+  icon: mdi:battery
+  cards:
+  - type: custom:mod-card
+    card_mod:
+      style: "ha-card {\n  position: relative;\n  background: transparent !important;\n  border: 0 !important;\n\
+        \  box-shadow: none !important;\n  padding: 0 !important;\n}\n"
+    card:
+      type: vertical-stack
+      cards:
+      - type: entities
+        title: Battery Config
+        show_header_toggle: false
+        card_mod:
+          style:
+            hui-sensor-entity-row:
+              $:
+                hui-generic-entity-row:
+                  $: ":host {\n  min-height: 40px !important;\n}\nstate-badge {\n  display: none !important;\n}\n\
+                    .info {\n  margin-left: 0 !important;\n}\n"
+        entities:
+        - entity: sensor.garage_modbus_bridge_mppt_battery_chemistry
+          name: Battery chemistry
+        - entity: sensor.garage_modbus_bridge_mppt_battery_system_voltage
+          name: System voltage
+        - entity: sensor.garage_modbus_bridge_mppt_overdischarge_protection
+          name: Overdischarge protection
+        - entity: sensor.garage_modbus_bridge_mppt_overdischarge_recovery
+          name: Overdischarge recovery
+        - entity: sensor.garage_modbus_bridge_mppt_overcharge_protection
+          name: Overcharge protection
+        - entity: sensor.garage_modbus_bridge_mppt_overcharge_recovery
+          name: Overcharge recovery
+        - entity: sensor.garage_modbus_bridge_mppt_constant_charge_voltage
+          name: Constant charge voltage
+        - entity: sensor.garage_modbus_bridge_mppt_float_voltage_raw
+          name: Float voltage (raw; 65535 = unset)
+        - entity: sensor.garage_modbus_bridge_mppt_equalization_voltage_raw
+          name: Equalization voltage (raw; 65535 = unset)
+        - entity: sensor.garage_modbus_bridge_mppt_equalization_duration_raw
+          name: Equalization duration (raw; 65535 = unset)
+      - type: heading
+        heading: ''
+        heading_style: subtitle
+        badges:
+        - type: button
+          icon: mdi:cog-outline
+          tap_action:
+            action: navigate
+            navigation_path: /eco-worthy-mppt-60a-charger/configuration
+        card_mod:
+          style: ":host {\n  position: absolute !important;\n  top: 7px;\n  right: 10px;\n  z-index: 3;\n  width:\
+            \ 48px;\n  min-width: 48px;\n  margin: 0 !important;\n  padding: 0 !important;\n  background: transparent\
+            \ !important;\n}\n"
+      card_mod:
+        style: '#root { position: relative; gap: 0 !important; }
+
+          '
+- title: Configuration
+  path: configuration
+  icon: mdi:cog
+  subview: true
+  cards:
+  - type: entities
+    title: Battery Configuration
+    show_header_toggle: false
+    entities:
+    - entity: select.garage_modbus_bridge_mppt_draft_battery_type
+      name: ' '
+      card_mod:
+        style: ":host {\n  position: relative !important;\n  display: flex !important;\n  align-items: center !important;\n\
+          \  width: 100% !important;\n  min-height: 36px !important;\n  height: 36px !important;\n}\n:host::after\
+          \ {\n  content: \"Battery chemistry\";\n  position: absolute !important;\n  left: 56px !important;\n \
+          \ top: 50% !important;\n  transform: translateY(-50%) !important;\n  font-size: 20px !important;\n  color:\
+          \ var(--primary-text-color);\n  pointer-events: none !important;\n  white-space: nowrap;\n}\nha-select,\
+          \ ha-picker-combo-box, ha-generic-picker {\n  position: absolute !important;\n  right: 0 !important;\n\
+          \  top: 50% !important;\n  transform: translateY(-50%) !important;\n  width: 155px !important;\n  max-width:\
+          \ 155px !important;\n  zoom: 0.75 !important;\n}\n"
+    - entity: select.garage_modbus_bridge_mppt_draft_system_voltage
+      name: ' '
+      card_mod:
+        style: ":host {\n  position: relative !important;\n  display: flex !important;\n  align-items: center !important;\n\
+          \  width: 100% !important;\n  min-height: 45px !important;\n  height: 45px !important;\n}\n:host::after\
+          \ {\n  content: \"System voltage\";\n  position: absolute !important;\n  left: 56px !important;\n  top:\
+          \ 50% !important;\n  transform: translateY(-50%) !important;\n  font-size: 20px !important;\n  color:\
+          \ var(--primary-text-color);\n  pointer-events: none !important;\n  white-space: nowrap;\n}\nha-select,\
+          \ ha-picker-combo-box, ha-generic-picker {\n  position: absolute !important;\n  right: 0 !important;\n\
+          \  top: 50% !important;\n  transform: translateY(-50%) !important;\n  width: 155px !important;\n  max-width:\
+          \ 155px !important;\n  zoom: 0.75 !important;\n}\n"
+    - entity: number.garage_modbus_bridge_mppt_draft_overdischarge_protection
+      name: Overdischarge protection
+      card_mod:
+        style:
+          hui-generic-entity-row $: ":host {\n  min-height: 36px !important;\n  height: 36px !important;\n}\n.info\
+            \ {\n  font-size: 13px !important;\n}\n"
+          .: "ha-input, ha-textfield, ha-select, ha-control-number-buttons {\n  zoom: 0.78 !important;\n  max-width:\
+            \ 130px !important;\n}\n"
+    - entity: number.garage_modbus_bridge_mppt_draft_overcharge_protection
+      name: Overcharge protection
+      card_mod:
+        style:
+          hui-generic-entity-row $: ":host {\n  min-height: 36px !important;\n  height: 36px !important;\n}\n.info\
+            \ {\n  font-size: 13px !important;\n}\n"
+          .: "ha-input, ha-textfield, ha-select, ha-control-number-buttons {\n  zoom: 0.78 !important;\n  max-width:\
+            \ 130px !important;\n}\n"
+    - entity: number.garage_modbus_bridge_mppt_draft_overdischarge_recovery
+      name: Overdischarge recovery
+      card_mod:
+        style:
+          hui-generic-entity-row $: ":host {\n  min-height: 36px !important;\n  height: 36px !important;\n}\n.info\
+            \ {\n  font-size: 13px !important;\n}\n"
+          .: "ha-input, ha-textfield, ha-select, ha-control-number-buttons {\n  zoom: 0.78 !important;\n  max-width:\
+            \ 130px !important;\n}\n"
+    - entity: number.garage_modbus_bridge_mppt_draft_overcharge_recovery
+      name: Overcharge recovery
+      card_mod:
+        style:
+          hui-generic-entity-row $: ":host {\n  min-height: 36px !important;\n  height: 36px !important;\n}\n.info\
+            \ {\n  font-size: 13px !important;\n}\n"
+          .: "ha-input, ha-textfield, ha-select, ha-control-number-buttons {\n  zoom: 0.78 !important;\n  max-width:\
+            \ 130px !important;\n}\n"
+    - entity: number.garage_modbus_bridge_mppt_draft_constant_charge_voltage
+      name: Constant charging voltage
+      card_mod:
+        style:
+          hui-generic-entity-row $: ":host {\n  min-height: 36px !important;\n  height: 36px !important;\n}\n.info\
+            \ {\n  font-size: 13px !important;\n}\n"
+          .: "ha-input, ha-textfield, ha-select, ha-control-number-buttons {\n  zoom: 0.78 !important;\n  max-width:\
+            \ 130px !important;\n}\n"
+    - type: conditional
+      conditions:
+      - entity: select.garage_modbus_bridge_mppt_draft_battery_type
+        state: Custom
+      row:
+        entity: number.garage_modbus_bridge_mppt_draft_float_voltage
+        name: Float charging voltage
+        card_mod:
+          style:
+            hui-generic-entity-row $: ":host {\n  min-height: 36px !important;\n  height: 36px !important;\n}\n\
+              .info {\n  font-size: 13px !important;\n}\n"
+            .: "ha-input, ha-textfield, ha-select, ha-control-number-buttons {\n  zoom: 0.78 !important;\n  max-width:\
+              \ 130px !important;\n}\n"
+    - type: conditional
+      conditions:
+      - entity: select.garage_modbus_bridge_mppt_draft_battery_type
+        state_not: Custom
+      row:
+        entity: number.garage_modbus_bridge_mppt_draft_float_voltage
+        name: Float charging voltage
+        card_mod:
+          style:
+            hui-generic-entity-row $: ":host {\n  min-height: 36px !important;\n  height: 36px !important;\n}\n\
+              .info {\n  font-size: 13px !important;\n}\n"
+            .: ":host {\n  opacity: 0.38 !important;\n  pointer-events: none !important;\n  filter: grayscale(1);\n\
+              }\nha-input, ha-textfield, ha-select, ha-control-number-buttons {\n  zoom: 0.78 !important;\n  max-width:\
+              \ 130px !important;\n}\n"
+    - type: conditional
+      conditions:
+      - entity: select.garage_modbus_bridge_mppt_draft_battery_type
+        state: Custom
+      row:
+        entity: number.garage_modbus_bridge_mppt_draft_equalization_voltage
+        name: Equalization voltage
+        card_mod:
+          style:
+            hui-generic-entity-row $: ":host {\n  min-height: 36px !important;\n  height: 36px !important;\n}\n\
+              .info {\n  font-size: 13px !important;\n}\n"
+            .: "ha-input, ha-textfield, ha-select, ha-control-number-buttons {\n  zoom: 0.78 !important;\n  max-width:\
+              \ 130px !important;\n}\n"
+    - type: conditional
+      conditions:
+      - entity: select.garage_modbus_bridge_mppt_draft_battery_type
+        state_not: Custom
+      row:
+        entity: number.garage_modbus_bridge_mppt_draft_equalization_voltage
+        name: Equalization voltage
+        card_mod:
+          style:
+            hui-generic-entity-row $: ":host {\n  min-height: 36px !important;\n  height: 36px !important;\n}\n\
+              .info {\n  font-size: 13px !important;\n}\n"
+            .: ":host {\n  opacity: 0.38 !important;\n  pointer-events: none !important;\n  filter: grayscale(1);\n\
+              }\nha-input, ha-textfield, ha-select, ha-control-number-buttons {\n  zoom: 0.78 !important;\n  max-width:\
+              \ 130px !important;\n}\n"
+    - type: conditional
+      conditions:
+      - entity: select.garage_modbus_bridge_mppt_draft_battery_type
+        state: Custom
+      row:
+        entity: number.garage_modbus_bridge_mppt_draft_equalization_duration_raw
+        name: Equalization duration (minutes)
+        card_mod:
+          style:
+            hui-generic-entity-row $: ":host {\n  min-height: 36px !important;\n  height: 36px !important;\n}\n\
+              .info {\n  font-size: 13px !important;\n}\n"
+            .: "ha-input, ha-textfield, ha-select, ha-control-number-buttons {\n  zoom: 0.78 !important;\n  max-width:\
+              \ 130px !important;\n}\n"
+    - type: conditional
+      conditions:
+      - entity: select.garage_modbus_bridge_mppt_draft_battery_type
+        state_not: Custom
+      row:
+        entity: number.garage_modbus_bridge_mppt_draft_equalization_duration_raw
+        name: Equalization duration (minutes)
+        card_mod:
+          style:
+            hui-generic-entity-row $: ":host {\n  min-height: 36px !important;\n  height: 36px !important;\n}\n\
+              .info {\n  font-size: 13px !important;\n}\n"
+            .: ":host {\n  opacity: 0.38 !important;\n  pointer-events: none !important;\n  filter: grayscale(1);\n\
+              }\nha-input, ha-textfield, ha-select, ha-control-number-buttons {\n  zoom: 0.78 !important;\n  max-width:\
+              \ 130px !important;\n}\n"
+    - type: buttons
+      entities:
+      - entity: select.garage_modbus_bridge_mppt_draft_battery_type
+        name: Cancel
+        icon: mdi:close
+        tap_action:
+          action: navigate
+          navigation_path: /eco-worthy-mppt-60a-charger/settings
+      - entity: button.garage_modbus_bridge_mppt_save_battery_configuration
+        name: Save
+        icon: mdi:content-save
+        tap_action:
+          action: perform-action
+          perform_action: button.press
+          target:
+            entity_id: button.garage_modbus_bridge_mppt_save_battery_configuration
+          confirmation:
+            text: Send the ten battery configuration registers to the controller?
+    card_mod:
+      style: "#states {\n  padding: 8px 12px !important;\n}\n#states > div {\n  margin: 2px 0 !important;\n}\n.buttons\
+        \ {\n  justify-content: space-between !important;\n  margin-top: 6px !important;\n}\n"
+- title: History
+  path: history
+  icon: mdi:calendar-month
+  cards:
+  - type: custom:tabbed-card
+    options:
+      defaultTabIndex: 0
+    tabs:
+    - attributes:
+        label: Month
+        icon: mdi:calendar-month
+      card:
+        type: custom:apexcharts-card
+        header:
+          show: true
+          title: Daily production (kWh)
+          show_states: false
+        graph_span: 32d
+        apex_config:
+          chart:
+            height: 500
+            toolbar:
+              show: false
+          stroke:
+            curve: straight
+            width: 2
+          markers:
+            size: 5
+            hover:
+              size: 8
+          tooltip:
+            enabled: true
+            shared: false
+            intersect: true
+            x:
+              formatter: EVAL:function(value) { const n=new Date(); const a=new Date(n.getFullYear(),n.getMonth(),n.getDate(),12).getTime();
+                const b=new Date(n.getFullYear(),n.getMonth(),n.getDate()-30,12).getTime(); return new Date(a+b-Number(value)).toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'});
+                }
+            'true':
+              formatter: EVAL:function(value) { return value.toFixed(1) + " kWh"; }
+          xaxis:
+            type: datetime
+            labels:
+              formatter: EVAL:function(value) { const n=new Date(); const a=new Date(n.getFullYear(),n.getMonth(),n.getDate(),12).getTime();
+                const b=new Date(n.getFullYear(),n.getMonth(),n.getDate()-30,12).getTime(); return String(new Date(a+b-Number(value)).getDate());
+                }
+          yaxis:
+            min: 0
+            decimalsInFloat: 1
+        series:
+        - entity: sensor.garage_modbus_bridge_mppt_history_daily_slot_01
+          name: Daily energy
+          type: line
+          data_generator: "const prefix = 'sensor.garage_modbus_bridge_mppt_history_daily_slot_';\nconst now = new\
+            \ Date();\nconst year = now.getFullYear();\nconst month = now.getMonth();\nconst count = 31;\nconst\
+            \ points = [];\nfor (let i = 1; i <= count; i++) {\n  const id = prefix + String(i).padStart(2, '0');\n\
+            \  const raw = hass.states[id]?.state;\n  if (raw === undefined || raw === 'unknown' || raw === 'unavailable'\
+            \ || raw === '') continue;\n  const value = Number(raw);\n  if (!Number.isFinite(value)) continue;\n\
+            \  const date = new Date(year, month, now.getDate() - (count - i), 12);\n  points.push([date.getTime(),\
+            \ value]);\n}\nreturn points;"
+    - attributes:
+        label: Year
+        icon: mdi:calendar
+      card:
+        type: custom:apexcharts-card
+        header:
+          show: true
+          title: Monthly production (kWh)
+          show_states: false
+        graph_span: 1y
+        apex_config:
+          chart:
+            height: 500
+            toolbar:
+              show: false
+          stroke:
+            curve: straight
+            width: 2
+          markers:
+            size: 5
+            hover:
+              size: 8
+          tooltip:
+            enabled: true
+            shared: false
+            intersect: true
+            x:
+              formatter: EVAL:function(value) { const n=new Date(); const v=new Date(Number(value)); const offset=(n.getFullYear()-v.getFullYear())*12+n.getMonth()-v.getMonth();
+                return new Date(n.getFullYear(),n.getMonth()-(11-offset),1).toLocaleDateString(undefined,{month:'long',year:'numeric'});
+                }
+            'true':
+              formatter: EVAL:function(value) { return value.toFixed(1) + " kWh"; }
+          xaxis:
+            type: datetime
+            labels:
+              formatter: EVAL:function(value) { const n=new Date(); const v=new Date(Number(value)); const offset=(n.getFullYear()-v.getFullYear())*12+n.getMonth()-v.getMonth();
+                return new Date(n.getFullYear(),n.getMonth()-(11-offset),1).toLocaleDateString(undefined,{month:'short'});
+                }
+          yaxis:
+            min: 0
+            decimalsInFloat: 1
+        series:
+        - entity: sensor.garage_modbus_bridge_mppt_history_monthly_slot_01
+          name: Monthly energy
+          type: line
+          data_generator: "const prefix = 'sensor.garage_modbus_bridge_mppt_history_monthly_slot_';\nconst now =\
+            \ new Date();\nconst year = now.getFullYear();\nconst month = now.getMonth();\nconst count = 12;\nconst\
+            \ points = [];\nfor (let i = 1; i <= count; i++) {\n  const id = prefix + String(i).padStart(2, '0');\n\
+            \  const raw = hass.states[id]?.state;\n  if (raw === undefined || raw === 'unknown' || raw === 'unavailable'\
+            \ || raw === '') continue;\n  const value = Number(raw);\n  if (!Number.isFinite(value)) continue;\n\
+            \  const date = new Date(year, month - (count - i), 1, 12);\n  points.push([date.getTime(), value]);\n\
+            }\nreturn points;"
+  panel: true
+- title: Diagnostics
+  path: diagnostics
+  icon: mdi:clipboard-text-outline
+  cards:
+  - type: entities
+    title: Raw state and faults
+    show_header_toggle: false
+    entities:
+    - entity: sensor.garage_modbus_bridge_mppt_fault_bitmask_raw
+    - entity: binary_sensor.garage_modbus_bridge_mppt_battery_overvoltage_fault
+    - entity: binary_sensor.garage_modbus_bridge_mppt_battery_low_voltage_fault
+    - entity: sensor.garage_modbus_bridge_mppt_charging_active_raw
+    - entity: sensor.garage_modbus_bridge_mppt_load_mode_raw
+    - entity: sensor.garage_modbus_bridge_mppt_temperature_unit_raw
+  - type: entities
+    title: Unidentified registers
+    show_header_toggle: false
+    entities:
+    - entity: sensor.garage_modbus_bridge_mppt_unknown_150e
+    - entity: sensor.garage_modbus_bridge_mppt_unknown_150f
+    - entity: sensor.garage_modbus_bridge_mppt_unknown_1510
+    - entity: sensor.garage_modbus_bridge_mppt_unknown_1511
+    - entity: sensor.garage_modbus_bridge_mppt_unknown_1520
+    - entity: sensor.garage_modbus_bridge_mppt_unknown_1521
+  - type: markdown
+    content: Historical slots are **provisional** (calendar positions unverified). Values are included for diagnostics,
+      not the Energy dashboard.
+  - type: entities
+    title: Monthly historical slots
+    show_header_toggle: false
+    entities:
+    - entity: sensor.garage_modbus_bridge_mppt_history_monthly_slot_01
+    - entity: sensor.garage_modbus_bridge_mppt_history_monthly_slot_02
+    - entity: sensor.garage_modbus_bridge_mppt_history_monthly_slot_03
+    - entity: sensor.garage_modbus_bridge_mppt_history_monthly_slot_04
+    - entity: sensor.garage_modbus_bridge_mppt_history_monthly_slot_05
+    - entity: sensor.garage_modbus_bridge_mppt_history_monthly_slot_06
+    - entity: sensor.garage_modbus_bridge_mppt_history_monthly_slot_07
+    - entity: sensor.garage_modbus_bridge_mppt_history_monthly_slot_08
+    - entity: sensor.garage_modbus_bridge_mppt_history_monthly_slot_09
+    - entity: sensor.garage_modbus_bridge_mppt_history_monthly_slot_10
+    - entity: sensor.garage_modbus_bridge_mppt_history_monthly_slot_11
+    - entity: sensor.garage_modbus_bridge_mppt_history_monthly_slot_12
+  - type: entities
+    title: Daily historical slots
+    show_header_toggle: false
+    entities:
+    - entity: sensor.garage_modbus_bridge_mppt_history_daily_slot_01
+    - entity: sensor.garage_modbus_bridge_mppt_history_daily_slot_02
+    - entity: sensor.garage_modbus_bridge_mppt_history_daily_slot_03
+    - entity: sensor.garage_modbus_bridge_mppt_history_daily_slot_04
+    - entity: sensor.garage_modbus_bridge_mppt_history_daily_slot_05
+    - entity: sensor.garage_modbus_bridge_mppt_history_daily_slot_06
+    - entity: sensor.garage_modbus_bridge_mppt_history_daily_slot_07
+    - entity: sensor.garage_modbus_bridge_mppt_history_daily_slot_08
+    - entity: sensor.garage_modbus_bridge_mppt_history_daily_slot_09
+    - entity: sensor.garage_modbus_bridge_mppt_history_daily_slot_10
+    - entity: sensor.garage_modbus_bridge_mppt_history_daily_slot_11
+    - entity: sensor.garage_modbus_bridge_mppt_history_daily_slot_12
+    - entity: sensor.garage_modbus_bridge_mppt_history_daily_slot_13
+    - entity: sensor.garage_modbus_bridge_mppt_history_daily_slot_14
+    - entity: sensor.garage_modbus_bridge_mppt_history_daily_slot_15
+    - entity: sensor.garage_modbus_bridge_mppt_history_daily_slot_16
+    - entity: sensor.garage_modbus_bridge_mppt_history_daily_slot_17
+    - entity: sensor.garage_modbus_bridge_mppt_history_daily_slot_18
+    - entity: sensor.garage_modbus_bridge_mppt_history_daily_slot_19
+    - entity: sensor.garage_modbus_bridge_mppt_history_daily_slot_20
+    - entity: sensor.garage_modbus_bridge_mppt_history_daily_slot_21
+    - entity: sensor.garage_modbus_bridge_mppt_history_daily_slot_22
+    - entity: sensor.garage_modbus_bridge_mppt_history_daily_slot_23
+    - entity: sensor.garage_modbus_bridge_mppt_history_daily_slot_24
+    - entity: sensor.garage_modbus_bridge_mppt_history_daily_slot_25
+    - entity: sensor.garage_modbus_bridge_mppt_history_daily_slot_26
+    - entity: sensor.garage_modbus_bridge_mppt_history_daily_slot_27
+    - entity: sensor.garage_modbus_bridge_mppt_history_daily_slot_28
+    - entity: sensor.garage_modbus_bridge_mppt_history_daily_slot_29
+    - entity: sensor.garage_modbus_bridge_mppt_history_daily_slot_30
+    - entity: sensor.garage_modbus_bridge_mppt_history_daily_slot_31
