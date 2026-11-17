@@ -42,7 +42,7 @@ These notes document **observed traffic from one ECO-WORTHY 60 A MPPT controller
 | `0x1510` | Unknown | raw | Unknown |
 | `0x1511` | Unknown | raw | Unknown |
 | `0x1512` | Temperature unit | **0 Celsius; 1 Fahrenheit** | Observed/readback |
-| `0x1513` | Load mode | `0x13FC` ON; `0x13FD` OFF | Verified ON capture |
+| `0x1513` | Load mode | Five verified values: see mode table below | User-verified app modes |
 | `0x1514` | Load status | 0 OFF; 1 ON | Verified readback |
 | `0x1515` | Battery chemistry | 0 Custom; 4 LiFePO4 confirmed in this setup | Captured/app compared |
 | `0x1516` | System voltage | 4 = 48 V; other values unconfirmed here | Verified 48 V |
@@ -69,6 +69,20 @@ Main read request:
 The response uses a `0x44` (68-byte) data payload holding 34 words.
 
 History uses starting address `0x1600`, count `0x002B` (43). The first 12 slots `0x1600–0x160B` represent monthly production; the next 31 `0x160C–0x162A` daily production. Values were interpreted as raw ÷10 kWh. In the working dashboard the first slot represents current period, and the chart places newest at the **left**. Exact calendar rollover semantics on other firmware builds are not established.
+
+## Complete load mode map (holding register 0x1513 / decimal 5395)
+
+All five values below were verified against the ECO-WORTHY app in the original installation. Load mode is distinct from **actual load output state**, reported separately in `0x1514`.
+
+| ECO-WORTHY app mode | Hex | Decimal |
+| --- | --- | ---: |
+| On | `0x13FC` | 5116 |
+| Off | `0x13FD` | 5117 |
+| Exclusive Light Control | `0x13EC` | 5100 |
+| Shut down load in 1h | `0x13ED` | 5101 |
+| Shut down load in 2h | `0x13EE` | 5102 |
+
+The ESPHome `MPPT Load Mode` select writes a single register using Modbus FC16 (function `0x10`) and reads back register `0x1513` to synchronize the selected mode. The independent `MPPT Load Output` switch **reads actual state from `0x1514`** and retains its explicit On/Off behavior. In light control and timed modes, the physical output can change autonomously; `0x1514` is authoritative. The mode names/values are verified for this charger; behavior and supported modes on the 40A remain untested.
 
 ## Captured load ON write (OEM app)
 
