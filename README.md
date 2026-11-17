@@ -1,127 +1,94 @@
-# ECO-WORTHY MPPT 60A — ESPHome + Home Assistant
+# ECO-WORTHY MPPT — ESPHome package + Home Assistant dashboard
 
-Community-developed ESPHome firmware and a Home Assistant dashboard for an ECO-WORTHY MPPT 60 A solar charge controller. Based on captured Modbus RTU traffic and iterative testing on one installation; **not an official ECO-WORTHY integration**. Do not assume different models or firmware use the same registers.
+A community-maintained Modbus RTU integration for an ECO-WORTHY MPPT solar charge controller, derived from captured traffic and iterative testing on the **60A** model. **Not an official ECO-WORTHY project.** The **40A model has not been tested** and must not be assumed register-compatible.
 
-## What is included
+## What this repository provides
 
-- Live PV, charging, battery, load, fault, temperature and energy readings
-- Load output ON/OFF control with controller readback
-- Controller Celsius/Fahrenheit selector with controller-side Modbus write and readback (no dashboard double conversion)
-- Battery configuration screen with staged edits, explicit Save and 10-register FC16 write
-- Monthly (31 daily records) and yearly (12 monthly records) production graphs; newest entries at the left
-- Diagnostics and raw registers
-- Two JK BMS BLE instances in the supplied ESPHome firmware (this is **required by the included configuration** unless you remove the JK BMS sections)
+- A reusable **MPPT-only ESPHome package** — controller polling, register decoding, PV/battery/load/temperature measurements, faults, energy history, and readback-verified writes.
+- A minimal **ESP32-S3 example** that imports the package over Git.
+- A complete five-view Home Assistant dashboard (Readings, Settings, Configuration, History, Diagnostics).
+- Installation, compatibility, Modbus register notes and troubleshooting documentation.
 
-**IMPORTANT:** The published ESPHome file is a shareable configuration based on a working installation, not a plug-in binary. You must provide your own BMS Bluetooth MACs and secrets before installing. Device-specific MACs and LAN IPs were deliberately removed.
+**No JK BMS, BLE, battery-bank aggregation, or third-party BMS component is included or required.** Battery readings shown here are the *MPPT controller's* own measurements; a separately installed JK BMS, if any, remains a separate Home Assistant device.
 
-## Repository files
+## Files
 
-| Path | Purpose |
+| File | Use |
 | --- | --- |
-| [esphome/ecoworthy-mppt.yaml](esphome/ecoworthy-mppt.yaml) | Complete ESP32-S3 ESPHome controller/JK BMS configuration |
-| [homeassistant/dashboard.yaml](homeassistant/dashboard.yaml) | Complete five-view Lovelace dashboard |
-| [docs/INSTALLATION.md](docs/INSTALLATION.md) | Detailed initial installation, Git updates and validation |
-| [docs/MODBUS.md](docs/MODBUS.md) | Confirmed RTU frames, register map and remaining unknowns |
-| [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | Common control, BLE, UI and UART problems |
-| [docs/RESEARCH_NOTES.md](docs/RESEARCH_NOTES.md) | Historical investigation transcript; superseded conclusions may appear |
-
-## Hardware compatibility
-
-| Controller / host | Status | Notes |
-| --- | --- | --- |
-| ECO-WORTHY MPPT **60A** | **Tested on one installation** | Captured protocol and working ESP32-S3 firmware/dashboard |
-| ECO-WORTHY MPPT **40A** | **Untested candidate** | May share the same Modbus protocol; do not assume register addresses, values or writes match until verified |
-| ESP32-S3 + RS485 transceiver | **Current supplied firmware** | Wi-Fi + integrated JK BMS Bluetooth monitoring |
-| **RP2350 + Ethernet + RS485** | **Feasible, not yet ported/tested** | ESPHome supports RP2350 and SPI Ethernet; must replace ESP32-specific BLE/JK blocks and adapt UART/pins/config |
-| Raspberry Pi running Linux + USB/serial RS485 | **Possible alternate architecture, not supported by this YAML** | Requires a different Modbus/HA integration or custom service; ESPHome firmware cannot simply run on a Linux Pi |
-
-**An ESP32 is not inherently required for the MPPT's Modbus protocol.** An RP2350, or another capable Modbus RTU client, can communicate over RS485. However, the exact included YAML **does require ESP32-S3** because it uses ESP32-specific configuration and JK BMS BLE. Do not flash the ESP32 YAML to an RP2350 unchanged. An Ethernet module by itself is not an RS485 interface; an RS485 transceiver is also required. Model compatibility is distinct from host compatibility.
-
-See [hardware compatibility and future RP2350 port notes](docs/COMPATIBILITY.md).
+| [esphome/ecoworthy-mppt-package.yaml](esphome/ecoworthy-mppt-package.yaml) | Reusable MPPT Modbus package; imported into a host device config |
+| [examples/esp32-s3.yaml](examples/esp32-s3.yaml) | Device-specific ESP32-S3 configuration importing the package |
+| [homeassistant/dashboard.yaml](homeassistant/dashboard.yaml) | Home Assistant Lovelace dashboard |
+| [docs/INSTALLATION.md](docs/INSTALLATION.md) | Setup, dependencies, ESPHome packages, HACS and dashboard |
+| [docs/MODBUS.md](docs/MODBUS.md) | Register map, captures, read/write behavior, confidence levels |
+| [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md) | Tested 60A, untested 40A, future RP2350 + Ethernet |
+| [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | Serial, load, temperature, battery Save, chart problems |
+| [docs/RESEARCH_NOTES.md](docs/RESEARCH_NOTES.md) | Historical reverse-engineering notes (superseded claims may appear) |
 
 ## Dependencies
 
-### Hardware (required for the supplied ESP32-S3 firmware)
-- **ECO-WORTHY MPPT 60 A** controller with the observed RS485 Modbus RTU interface (40A model not tested)
-- **ESP32-S3** board supported by ESPHome (example target: esp32-s3-devkitc-1)
-- **3.3 V RS485 transceiver** wired to the ESP32 UART and driver-enable output
-- Compatible power supply, RS485 wiring and Wi-Fi
-- **Exclusive control of the RS485 master bus**. Unplug/isolate the original BT-02 dongle before enabling this ESPHome master; two unsynchronized masters can collide
-- For the unmodified YAML: **two compatible JK BMS units reachable by Bluetooth**, with correct MAC addresses and protocol setting. Remove/modify JK BMS blocks if using a different battery setup
+**Required for the ESP32-S3 example:** ECO-WORTHY 60A controller with observed RS485 RTU interface; ESP32-S3 board supported by ESPHome; a **3.3V-compatible RS485 transceiver**; Wi-Fi; ESPHome builder; correct power/wiring. The example uses **GPIO16 RX**, **GPIO17 TX**, **GPIO18 RS485 direction**, **115200 baud 8N1**, slave **1**. These GPIOs are *not* the charger's connector pinout. Disconnect the original **BT-02** before using this active Modbus master.
 
-Example ESP32 pin assignment in the supplied file: **RX GPIO16**, **TX GPIO17**, **RS485 direction GPIO18**; **115200 baud, 8N1, Modbus slave ID 1**. These are GPIO-to-transceiver assignments, **not** a verified controller connector pinout. Verify A/B, ground/reference, transceiver voltage, DE/RE and your particular hardware before energizing.
+**Required software:** ESPHome compatible with your ESP32-S3 host; Home Assistant with its built-in [ESPHome integration](https://www.home-assistant.io/integrations/esphome/). The dashboard also needs these **frontend cards**, installed via [HACS](https://www.hacs.xyz/) or manually: [card-mod](https://github.com/thomasloven/lovelace-card-mod), [ApexCharts Card](https://github.com/RomRider/apexcharts-card), and [Tabbed Card](https://github.com/kinghat/tabbed-card). HACS is an optional installation manager, not a runtime requirement. **There is no JK BMS dependency.**
 
-### Software
-- **ESPHome** with ESP32-S3/Arduino framework support and Git access during build
-- ESPHome external component **[syssi/esphome-jk-bms](https://github.com/syssi/esphome-jk-bms)**, automatically downloaded by the supplied YAML; use the BLE **jk_bms_ble** component
-- **Home Assistant** with the built-in **[ESPHome integration](https://www.home-assistant.io/integrations/esphome/)**
-- Home Assistant frontend custom cards (install via [HACS](https://www.hacs.xyz/) or manually):
-  1. **[card-mod](https://github.com/thomasloven/lovelace-card-mod)** (provides card_mod styling and custom:mod-card)
-  2. **[ApexCharts Card](https://github.com/RomRider/apexcharts-card)** (custom:apexcharts-card)
-  3. **[Tabbed Card](https://github.com/kinghat/tabbed-card)** (custom:tabbed-card)
-- HACS is the recommended **installation manager**, not a runtime firmware dependency. There is **no custom Home Assistant backend integration** required beyond ESPHome
+## Quick setup
 
-No fixed ESPHome / HA version has been certified across installations. Use a version supported by the referenced JK BMS component and test after upgrades. The dashboard uses modern HA YAML actions, heading/badge cards, and template rendering.
+1. Back up the original firmware/YAML, any controller battery settings and Home Assistant dashboard.
+2. Copy [examples/esp32-s3.yaml](examples/esp32-s3.yaml) to your ESPHome config (for example `/config/esphome/eco-worthy-mppt.yaml`). It pulls the MPPT package from GitHub.
+3. Adjust device name, GPIOs and Wi-Fi as needed. Put secrets in the **local ESPHome `secrets.yaml`**, never in Git:
 
-## Quick start
+   ```yaml
+   wifi_ssid: "YOUR_WIFI"
+   wifi_password: "YOUR_PASSWORD"
+   mppt_api_key: "YOUR_VALID_ESPHOME_ENCRYPTION_KEY"
+   mppt_ota_password: "YOUR_OTA_PASSWORD"
+   mppt_fallback_password: "YOUR_FALLBACK_AP_PASSWORD"
+   ```
 
-1. **Back up** existing ESPHome firmware/config, Home Assistant dashboard, battery settings and any API/OTA credentials.
-2. Copy **esphome/ecoworthy-mppt.yaml** to your ESPHome configuration directory, usually **/config/esphome/ecoworthy-mppt.yaml**. Replace the two example BLE MAC addresses under substitutions. Change RS485 pins and JK protocol as appropriate. The example does **not** contain the original user's MACs or IP.
-3. Add these keys to your existing local **secrets.yaml** (use real values; **never commit this file**):
+   Preserve existing API and OTA credentials when updating a running device.
+4. Unplug/isolate the OEM BT-02 so there is **only one RS485 master**.
+5. Validate, compile and flash with ESPHome. **The modular package has been parsed and checked for missing ID references, but has not yet been independently compiled or hardware-tested following extraction.** Check read-only readings before testing any writes.
+6. Add the device in Home Assistant's native ESPHome integration.
+7. Install the three frontend cards, create dashboard URL path `eco-worthy-mppt-60a-charger`, and paste [homeassistant/dashboard.yaml](homeassistant/dashboard.yaml) in the Raw configuration editor. Update entity ID prefixes if yours differ.
 
-   ~~~yaml
-   wifi_ssid2: "YOUR_WIFI_SSID"
-   wifi_password2: "YOUR_WIFI_PASSWORD"
-   JKBMS_API_KEY: "YOUR_EXISTING_ESPHOME_API_ENCRYPTION_KEY"
-   JKBMS_OTA_PASSWORD: "YOUR_OTA_PASSWORD"
-   fallbackAP_Password: "YOUR_FALLBACK_AP_PASSWORD"
-   ~~~
+See [complete installation instructions](docs/INSTALLATION.md).
 
-   An API encryption key must be a valid ESPHome-generated key. For an existing device, preserve its current API/OTA credentials to avoid access problems.
-4. Remove the original **BT-02** from the charger RS485 bus before active ESPHome polling or writes. Check wiring and the controller protocol first.
-5. **Validate, compile, flash and review ESPHome logs.** Check read-only measurements before using Load, temperature unit or Battery Save controls. This configuration was not independently compiled in this repository's publishing workflow.
-6. Add the ESPHome device through Home Assistant's **ESPHome integration** and verify your generated entity IDs in **Developer Tools → States**.
-7. Install **card-mod**, **ApexCharts Card**, and **Tabbed Card** in HACS (Frontend). Refresh the browser if cards are not registered.
-8. Create a Home Assistant dashboard with URL path **eco-worthy-mppt-60a-charger**, open **Edit dashboard → Raw configuration editor**, then paste **homeassistant/dashboard.yaml**. The dashboard is written for entity IDs such as **sensor.garage_modbus_bridge_mppt_pv_voltage** and **select.garage_modbus_bridge_mppt_draft_temperature_unit**; if your device/entity names differ, search-replace the prefix throughout the YAML.
-9. Test the **Readings**, **Settings**, **Configuration**, **History** and **Diagnostics** views. The Battery Config gear/back links assume **/eco-worthy-mppt-60a-charger/**.
+## Import as a package
 
-For a file-backed YAML dashboard, see [docs/INSTALLATION.md](docs/INSTALLATION.md).
+The ESP32-S3 example already uses:
 
-## Optional Git-based ESPHome updates
-
-ESPHome supports [remote Git packages](https://esphome.io/components/packages/). For example, a local YAML can import the whole configuration:
-
-~~~yaml
+```yaml
 packages:
   ecoworthy:
     url: https://github.com/xadonxander/ECO-Worthy-HomeAssistant-ESPHome
     ref: main
     files:
-      - esphome/ecoworthy-mppt.yaml
+      - esphome/ecoworthy-mppt-package.yaml
     refresh: 1d
+```
 
-substitutions:
-  bms1_mac: "YOUR_FIRST_BMS_MAC"
-  bms2_mac: "YOUR_SECOND_BMS_MAC"
-~~~
+For production use, pin `ref` to a reviewed release/commit rather than updating automatically from `main`. A package refresh does **not** automatically compile/flash firmware.
 
-Local secrets still belong in the ESPHome configuration directory. Review the full package and avoid duplicate top-level configuration entries if adding overrides. **Git refresh does not automatically compile or flash new firmware.** For a solar controller that accepts writes, prefer pinned tags/commits over following main unattended.
+The package contains **MPPT entities and Modbus logic only**. Your host YAML owns ESPHome board selection, API, OTA, logger, Wi-Fi or Ethernet, and other unrelated integrations. An RP2350 with Ethernet and an RS485 transceiver is a **possible future host**, but its firmware has **not** been ported or verified. The current example is ESP32-S3 only.
 
-Home Assistant does **not** automatically import a dashboard from a GitHub URL; copy or synchronize the file into your HA config and reload it after updating.
+## Confirmed behavior and cautions
 
-## Safety and limitations
+- **Load output** ON/OFF uses Modbus function `0x10` (FC16) writing **one register**, `0x1513`: `0x13FC` ON, `0x13FD` OFF, readback `0x1514`.
+- **Temperature selector** writes one register, `0x1512` (0 Celsius, 1 Fahrenheit), then checks the charger's response. The dashboard avoids double conversion.
+- **Battery Configuration Save** writes **10 registers** from `0x1515` through `0x151E`; ensure the values match your battery requirements before saving.
+- **History:** 31 daily and 12 monthly slot values, newest plotted **left**.
+- Never write to unknown registers, expose write functions to untrusted networks, or connect two unsynchronized RS485 masters.
 
-- **Battery Save** writes **10 consecutive holding registers** from **0x1515 to 0x151E**. Wrong chemistry, voltage or charging limits may damage equipment. Confirm values against the battery/BMS and controller documentation.
-- **Load ON/OFF** writes only **one register**, **0x1513**, with **0x13FC** (ON) or **0x13FD** (OFF); state comes from **0x1514**. Modbus **function 0x10 (FC16)** is *not* “10 registers.”
-- **Temperature units** use **0x1512** (0 = Celsius, 1 = Fahrenheit). The dashboard does not independently calculate 9/5 + 32.
-- Unknown registers must remain read-only. Charging enable/disable is **not** the same as load output switching and is not mapped here.
-- Production history is read from 12 monthly and 31 daily slots; newest is intentionally plotted on the **left** using the observed reverse-order display convention. Confirm rollover behavior on other controller versions.
-- Do not expose ESPHome or Modbus controls to untrusted networks. Verify every write with ACK and fresh register readback.
+## Compatibility
 
-## Documentation
+| Model/host | Status |
+| --- | --- |
+| ECO-WORTHY 60A MPPT | Tested in original setup; this standalone package still needs independent post-refactor hardware validation |
+| ECO-WORTHY 40A MPPT | **Not tested** |
+| ESP32-S3 + Wi-Fi + RS485 | Included host example |
+| RP2350 + Ethernet + RS485 | Feasible architecture, **not yet ported/tested** |
 
-Read [installation and dependencies](docs/INSTALLATION.md), [Modbus findings](docs/MODBUS.md) and [troubleshooting](docs/TROUBLESHOOTING.md) before editing write-related registers. See the archived [research notes](docs/RESEARCH_NOTES.md) for captured observations and provisional interpretations.
+The published MPPT package has no Bluetooth or JK BMS code. For a separate JK BMS installation, configure it independently in ESPHome or Home Assistant; this project does not install it.
 
 ## License
 
-No open-source license has been selected yet. Add a license only after the repository owner chooses one.
+No license has been selected by the repository owner yet.
