@@ -634,12 +634,12 @@ switch:
     restore_mode: DISABLED
     turn_on_action:
       - script.execute:
-          id: mppt_set_load
-          enable: true
+          id: mppt_set_load_mode
+          mode_value: 5116
     turn_off_action:
       - script.execute:
-          id: mppt_set_load
-          enable: false
+          id: mppt_set_load_mode
+          mode_value: 5117
 
 text_sensor:
   - platform: template
@@ -665,6 +665,24 @@ button:
       - script.execute: mppt_write_battery_config
 
 select:
+  - platform: template
+    name: "MPPT Load Mode"
+    id: mppt_load_mode_select
+    optimistic: false
+    options:
+      - "On"
+      - "Off"
+      - "Exclusive Light Control"
+      - "Shut down load in 1h"
+      - "Shut down load in 2h"
+    set_action:
+      - lambda: |-
+          if (x == "On") id(mppt_set_load_mode).execute(0x13FC);
+          else if (x == "Off") id(mppt_set_load_mode).execute(0x13FD);
+          else if (x == "Exclusive Light Control") id(mppt_set_load_mode).execute(0x13EC);
+          else if (x == "Shut down load in 1h") id(mppt_set_load_mode).execute(0x13ED);
+          else if (x == "Shut down load in 2h") id(mppt_set_load_mode).execute(0x13EE);
+
   - platform: template
     name: "MPPT Draft Battery Type"
     id: mppt_draft_battery_type
@@ -984,13 +1002,21 @@ uart:
                 ESP_LOGW("mppt_temp", "Unexpected temperature unit register value: %u", raw[18]);
               }
               id(mppt_1513).publish_state((float)raw[19] * 1.0f);
+              // The dropdown tracks the charger's actual mode, not the requested mode.
+              switch (raw[19]) {
+                case 0x13FC: id(mppt_load_mode_select).publish_state("On"); break;
+                case 0x13FD: id(mppt_load_mode_select).publish_state("Off"); break;
+                case 0x13EC: id(mppt_load_mode_select).publish_state("Exclusive Light Control"); break;
+                case 0x13ED: id(mppt_load_mode_select).publish_state("Shut down load in 1h"); break;
+                case 0x13EE: id(mppt_load_mode_select).publish_state("Shut down load in 2h"); break;
+                default: ESP_LOGW("mppt_load", "Unknown load mode 0x%04X", raw[19]); break;
+              }
               id(mppt_1514).publish_state((float)raw[20] * 1.0f);
               // Publish only observed hardware state, not requested state.
               if (raw[20] == 0 || raw[20] == 1)
                 id(mppt_load_output_switch).publish_state(raw[20] == 1);
-              if (id(mppt_load_busy) && raw[19] == id(mppt_load_target) &&
-                  raw[20] == (id(mppt_load_target) == 0x13FC ? 1 : 0))
-                ESP_LOGI("mppt_load", "Load mode and output readback verified");
+              if (id(mppt_load_busy) && raw[19] == id(mppt_load_target))
+                ESP_LOGI("mppt_load", "Load mode readback verified: 0x%04X", raw[19]);
               id(mppt_1515).publish_state((float)raw[21] * 1.0f);
               id(mppt_1516).publish_state((float)raw[22] * 1.0f);
               id(mppt_1517).publish_state((float)raw[23] * 0.1f);
@@ -1287,22 +1313,26 @@ script:
           else:
             - lambda: 'ESP_LOGW("mppt_temp", "Temperature unit write not sent: controller data unavailable or bus remained busy for 5s");'
 
-  - id: mppt_set_load
+  - id: mppt_set_load_mode
     mode: single
     parameters:
-      enable: bool
+      mode_value: uint16_t
     then:
+      - wait_until:
+          condition:
+            lambda: 'return !id(mppt_poll_busy) && !id(mppt_battery_fc10_busy) && !id(mppt_load_busy) && !id(mppt_write_pending) && !id(mppt_temp_busy);'
+          timeout: 5s
       - if:
           condition:
-            lambda: 'return id(mppt_battery_read_valid) && !id(mppt_load_busy) && !id(mppt_temp_busy) && !id(mppt_poll_busy) && !id(mppt_battery_fc10_busy) && !id(mppt_write_pending) && !id(mppt_temp_busy);'
+            lambda: 'return id(mppt_battery_read_valid) && !id(mppt_load_busy) && !id(mppt_temp_busy) && !id(mppt_poll_busy) && !id(mppt_battery_fc10_busy) && !id(mppt_write_pending) && (mode_value == 0x13FC || mode_value == 0x13FD || mode_value == 0x13EC || mode_value == 0x13ED || mode_value == 0x13EE);'
           then:
             - lambda: |-
                 id(mppt_load_busy) = true;
                 id(mppt_load_ack) = false;
                 id(mppt_load_pending) = true;
-                id(mppt_load_target) = enable ? 0x13FC : 0x13FD;
-                uint8_t frame[11] = {0x01,0x10,0x15,0x13,0x00,0x01,0x02,0x13,
-                                     uint8_t(enable ? 0xFC : 0xFD),0,0};
+                id(mppt_load_target) = mode_value;
+                uint8_t frame[11] = {0x01,0x10,0x15,0x13,0x00,0x01,0x02,
+                                     uint8_t(mode_value >> 8),uint8_t(mode_value & 0xFF),0,0};
                 uint16_t crc = 0xFFFF;
                 for (int i = 0; i < 9; ++i) {
                   crc ^= frame[i];
@@ -1317,7 +1347,7 @@ script:
                 id(rs485_uart).flush();
                 delayMicroseconds(175);
                 id(rs485_direction_output).turn_off();
-                ESP_LOGI("mppt_load", "FC10 load mode write requested: %s", enable ? "ON" : "OFF");
+                ESP_LOGI("mppt_load", "FC10 load mode write requested: 0x%04X", mode_value);
             - delay: 400ms
             - if:
                 condition:
@@ -1339,7 +1369,7 @@ script:
                 id(mppt_load_pending) = false;
                 id(mppt_load_busy) = false;
           else:
-            - lambda: 'ESP_LOGW("mppt_load", "Load command blocked: controller not ready or bus busy");'
+            - lambda: 'ESP_LOGW("mppt_load", "Load command blocked: controller not ready, bus busy, or invalid mode");'
 
   - id: mppt_poll_readonly
     mode: single
