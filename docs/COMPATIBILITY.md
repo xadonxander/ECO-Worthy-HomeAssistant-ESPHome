@@ -6,7 +6,7 @@ This repository documents a working **ECO-WORTHY MPPT 60 A controller** integrat
 
 | Controller | Status | Explanation |
 | --- | --- | --- |
-| ECO-WORTHY **60A MPPT** | Tested in the original installation | The published ESP32-S3 firmware and dashboard were developed around captured traffic from this model |
+| ECO-WORTHY **60A MPPT** | Tested in the original installation | The original combined installation and dashboard were developed around captured traffic from this model; the extracted modular package still needs post-refactor test |
 | ECO-WORTHY **40A MPPT** | **Not tested** | A plausible candidate, but identical Modbus registers, baud rate, scaling and write behavior have **not** been established |
 | Other ECO-WORTHY controllers | Not tested | Verify protocol independently before issuing writes |
 
@@ -26,7 +26,7 @@ An RP2350/Pico 2-class board is powerful enough to handle the modest Modbus traf
 - An ESPHome firmware configuration specifically written and validated for the RP2350 board
 - Home Assistant on the LAN using its ESPHome integration
 
-The existing ESP32-S3 firmware **cannot be used unchanged**. It declares `esp32:`, uses `esp32_ble_tracker`, `esp32_ble_client`, `jk_bms_ble`, and ESP32-specific UART pin definitions. JK BMS Bluetooth support must be dropped, relocated to another ESP32 gateway, or replaced with an alternative separately supported transport. The MPPT Modbus function itself does not need BLE.
+The **MPPT-only ESPHome package is now host-independent at the YAML organization level**, but its UART direction/timing and lambda code still require compile and hardware validation for RP2350. The [ESP32-S3 example](../examples/esp32-s3.yaml) specifies `esp32:` and Wi-Fi and is **not suitable for RP2350 unchanged**. There is no JK BMS/BLE dependency in the published package.
 
 For the MPPT, the original installation uses Modbus RTU **115200 baud, 8N1, slave ID 1**, with ESP32 GPIO16 RX, GPIO17 TX, and GPIO18 direction. **Those pins are not the charger connector pinout and should not be copied to an RP2350.** Check the actual RS485 wiring and transceiver.
 
@@ -40,7 +40,7 @@ For the MPPT, the original installation uses Modbus RTU **115200 baud, 8N1, slav
 
 ## Implementation strategy
 
-Maintain the existing tested ESP32-S3 YAML as one complete configuration. A future RP2350-specific YAML should reuse carefully extracted common Modbus parsing/logic only where ESPHome supports it, while handling Ethernet, board-specific UART control and the absence of JK BLE separately. Avoid labeling the RP2350 configuration as supported until it has compiled and completed end-to-end hardware testing.
+Maintain the MPPT core as [one standalone package](../esphome/ecoworthy-mppt-package.yaml). A future RP2350-specific *host* YAML can import it after adapting Ethernet, UART, and RS485 control, with compile/hardware validation. The existing ESP32-S3 host example is separate. Avoid labeling the RP2350 configuration as supported until it has compiled and completed end-to-end hardware testing.
 
 Useful references:
 - [ESPHome RP2040/RP2350 platform](https://esphome.io/components/rp2040/)
