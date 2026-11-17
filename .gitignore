@@ -1,0 +1,9 @@
+secrets.yaml
+**/secrets.yaml
+*.db
+*.db-journal
+.esphome/
+**/.esphome/
+__pycache__/
+.DS_Store
+*.log
