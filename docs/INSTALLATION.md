@@ -48,7 +48,7 @@ The example uses ESP32 GPIO16 RX, GPIO17 TX, GPIO18 RS485 driver-enable directio
 2. Create a new dashboard with URL path `eco-worthy-mppt-60a-charger`.
 3. Paste [`homeassistant/dashboard.yaml`](../homeassistant/dashboard.yaml) using **Edit dashboard → Raw configuration editor**.
 4. Check all five views: Readings, Settings, Configuration, History and Diagnostics. The gear/Cancel links assume `/eco-worthy-mppt-60a-charger/`. Change these paths if you choose another slug.
-5. Verify load and temperature controls respond to the controller readback before changing battery limits. The history chart intentionally plots newest values at the left.
+5. Verify the load output toggle **and the Load Mode dropdown**, plus the temperature control, respond to controller readback before changing battery limits. The history chart intentionally plots newest values at the left.
 
 ### Optional file-backed dashboard
 
@@ -85,7 +85,7 @@ Pin `ref` to a tested tag/commit when deploying to a live charger. Pulling an up
 
 ## Protocol notes
 
-The package reads live registers `0x1500–0x1521` and history `0x1600–0x162A`, writes `0x1513` for load ON/OFF and `0x1512` for °C/°F, and writes `0x1515–0x151E` **only on explicit Battery Save**. See [MODBUS.md](MODBUS.md) before changing any write logic. A write success should be checked by RTU ACK **and fresh readback**.
+The package reads live registers `0x1500–0x1521` and history `0x1600–0x162A`, writes `0x1513` for the five load modes (On, Off, Exclusive Light Control, 1h off, 2h off) and `0x1512` for °C/°F, and writes `0x1515–0x151E` **only on explicit Battery Save**. See [MODBUS.md](MODBUS.md) before changing any write logic. A write success should be checked by RTU ACK **and fresh readback**.
 
 ## Rollback / update safety
 
