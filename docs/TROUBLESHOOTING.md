@@ -54,16 +54,10 @@ Install through HACS Frontend or install/register manually, then hard-reload the
 - The example dashboard expects entity IDs prefixed `garage_modbus_bridge_`; HA may use a different generated prefix. Confirm via **Developer Tools → States** and replace entity IDs in the dashboard consistently.
 - Confirm matching API encryption credentials, network connectivity, OTA/reboot status and ESPHome log errors.
 
-## Missing Bluetooth JK BMS data
+## Modular configuration and separate BMS
 
-The included ESPHome file expects **two JK BMS BLE devices** and downloads `syssi/esphome-jk-bms` externally. Replace placeholder MAC addresses with actual BMS MACs, verify protocol version, and check BLE scan/connect logs. If no JK BMS exists, remove JK BMS-related configuration and references rather than leaving placeholder MACs.
+This repository publishes **MPPT only**. There are no JK BMS BLE clients or associated dependencies. If your previous combined firmware monitored JK BMS batteries, configure them separately in another ESPHome device or an independently maintained package. The ECO-WORTHY dashboard intentionally uses the **charger-reported** measurements, not JK BMS state.
 
-## Historical chart dates or blank chart
-
-- Confirm all three HACS frontend cards are installed and browser cache is refreshed.
-- Confirm history sensors `history_daily_slot_01` through `_31`, and monthly `_01` through `_12` exist.
-- The supplied history chart intentionally shows **current/newest production at the left**. It uses date remapping in ApexCharts data generators and formatters. Do not add `xaxis.reversed`—a previous change made the charts disappear in this installation.
-- The 31 daily / 12 monthly register slots are newest-first according to the tested installation. Validate calendar rollover on alternate firmware.
 
 ## Security and upgrades
 
