@@ -72,7 +72,7 @@ The package contains **MPPT entities and Modbus logic only**. Your host YAML own
 
 ## Confirmed behavior and cautions
 
-- **Load output** ON/OFF uses Modbus function `0x10` (FC16) writing **one register**, `0x1513`: `0x13FC` ON, `0x13FD` OFF, readback `0x1514`.
+- **Load output toggle and load mode dropdown:** both use Modbus function `0x10` (FC16) to write one holding register, `0x1513`. Selectable modes: On (`0x13FC`), Off (`0x13FD`), Exclusive Light Control (`0x13EC`), Shut down load in 1h (`0x13ED`), Shut down load in 2h (`0x13EE`). The dropdown tracks `0x1513`; the toggle tracks actual load state from `0x1514`.
 - **Temperature selector** writes one register, `0x1512` (0 Celsius, 1 Fahrenheit), then checks the charger's response. The dashboard avoids double conversion.
 - **Battery Configuration Save** writes **10 registers** from `0x1515` through `0x151E`; ensure the values match your battery requirements before saving.
 - **History:** 31 daily and 12 monthly slot values, newest plotted **left**.
