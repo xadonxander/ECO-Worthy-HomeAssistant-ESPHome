@@ -1,0 +1,2196 @@
+# ECO-WORTHY ESPHome controller: read monitoring + captured FC10 battery configuration write.
+# Preserves JK BMS, MPPT entities and secrets; writes are disabled at boot.
+# ECO-WORTHY MODBUS MASTER + JK BMS
+# DISCONNECT BT-02 BEFORE FLASHING: this firmware transmits Modbus requests.
+# Battery FC10 write based on captured OEM request; hardware write testing still required.
+# Historical date alignment remains provisional.
+substitutions:
+  bms1_name: "Battery 1"
+  bms2_name: "Battery 2"
+
+  bms1_mac: "AA:BB:CC:DD:EE:01"
+  bms2_mac: "AA:BB:CC:DD:EE:02"
+
+  protocol_version: JK02_32S
+
+  rs485_rx_pin: GPIO16
+  rs485_tx_pin: GPIO17
+  rs485_direction_pin: GPIO18
+
+esphome:
+  name: modbus_bridge
+  friendly_name: "Modbus Bridge"
+
+preferences:
+  flash_write_interval: 60s
+
+esp32:
+  board: esp32-s3-devkitc-1
+  framework:
+    type: arduino
+
+# ============================================================
+# EXTERNAL JK-BMS COMPONENT
+# ============================================================
+
+external_components:
+  - source:
+      type: git
+      url: https://github.com/syssi/esphome-jk-bms
+    components: [jk_bms_ble]
+
+# ============================================================
+# API - MUST MATCH EXISTING SNIFFER FIRMWARE KEY
+# ============================================================
+
+api:
+  encryption:
+    key: !secret JKBMS_API_KEY
+
+# ============================================================
+# OTA - MUST MATCH PASSWORD CURRENTLY ON DEVICE
+# ============================================================
+
+ota:
+  - platform: esphome
+    password: !secret JKBMS_OTA_PASSWORD
+
+# ============================================================
+# LOGGER
+# ============================================================
+
+logger:
+  level: DEBUG
+  logs:
+    esp32_ble_tracker: INFO
+    esp32_ble_client: INFO
+    jk_bms_ble: INFO
+
+# ============================================================
+# WIFI
+# ============================================================
+
+wifi:
+  ssid: !secret wifi_ssid2
+  password: !secret wifi_password2
+  # Optional: set use_address to your device's IP or hostname if needed
+  ap:
+    ssid: "JKBMS Relay Fallback"
+    password: !secret fallbackAP_Password
+
+captive_portal:
+
+# ============================================================
+# BLUETOOTH
+# ============================================================
+
+esp32_ble_tracker:
+  scan_parameters:
+    active: false
+
+ble_client:
+
+  # ----------------------------------------------------------
+  # BATTERY 1
+  # ----------------------------------------------------------
+
+  - mac_address: ${bms1_mac}
+    id: battery1_ble
+    auto_connect: true
+
+  # ----------------------------------------------------------
+  # BATTERY 2
+  # ----------------------------------------------------------
+
+  - mac_address: ${bms2_mac}
+    id: battery2_ble
+    auto_connect: true
+
+# ============================================================
+# JK BMS INSTANCES
+# ============================================================
+
+jk_bms_ble:
+
+  # ----------------------------------------------------------
+  # BATTERY 1
+  # ----------------------------------------------------------
+
+  - ble_client_id: battery1_ble
+    protocol_version: ${protocol_version}
+    throttle: 5s
+    id: battery1_bms
+
+  # ----------------------------------------------------------
+  # BATTERY 2
+  # ----------------------------------------------------------
+
+  - ble_client_id: battery2_ble
+    protocol_version: ${protocol_version}
+    throttle: 5s
+    id: battery2_bms
+
+# ============================================================
+# BINARY SENSORS
+# ============================================================
+
+binary_sensor:
+
+  # Decoded from 0x150C; these are read-only
+  - platform: template
+    id: mppt_overvoltage_fault
+    name: "MPPT Battery Overvoltage Fault"
+    device_class: problem
+  - platform: template
+    id: mppt_low_voltage_fault
+    name: "MPPT Battery Low Voltage Fault"
+    device_class: problem
+
+  # ==========================================================
+  # BATTERY 1
+  # ==========================================================
+
+  - platform: jk_bms_ble
+    jk_bms_ble_id: battery1_bms
+
+    balancing:
+      name: "${bms1_name} Balancing"
+
+    charging:
+      name: "${bms1_name} Charging"
+
+    discharging:
+      name: "${bms1_name} Discharging"
+
+    online_status:
+      name: "${bms1_name} Online"
+
+  # ==========================================================
+  # BATTERY 2
+  # ==========================================================
+
+  - platform: jk_bms_ble
+    jk_bms_ble_id: battery2_bms
+
+    balancing:
+      name: "${bms2_name} Balancing"
+
+    charging:
+      name: "${bms2_name} Charging"
+
+    discharging:
+      name: "${bms2_name} Discharging"
+
+    online_status:
+      name: "${bms2_name} Online"
+
+# ============================================================
+# SENSORS
+# ============================================================
+
+sensor:
+
+  # ECO-WORTHY MPPT — passive decoded registers (historical slot order provisional)
+  - platform: template
+    id: mppt_1500
+    name: "MPPT Controller ID"
+    update_interval: never
+    accuracy_decimals: 0
+  - platform: template
+    id: mppt_1501
+    name: "MPPT PV Voltage"
+    update_interval: never
+    accuracy_decimals: 1
+    unit_of_measurement: "V"
+    state_class: measurement
+    device_class: voltage
+  - platform: template
+    id: mppt_1502
+    name: "MPPT Battery Voltage"
+    update_interval: never
+    accuracy_decimals: 1
+    unit_of_measurement: "V"
+    state_class: measurement
+    device_class: voltage
+  - platform: template
+    id: mppt_1503
+    name: "MPPT Charging Current"
+    update_interval: never
+    accuracy_decimals: 1
+    unit_of_measurement: "A"
+    state_class: measurement
+    device_class: current
+  - platform: template
+    id: mppt_1504
+    name: "MPPT Load Voltage"
+    update_interval: never
+    accuracy_decimals: 1
+    unit_of_measurement: "V"
+  - platform: template
+    id: mppt_1505
+    name: "MPPT Load Current"
+    update_interval: never
+    accuracy_decimals: 1
+    unit_of_measurement: "A"
+  - platform: template
+    id: mppt_1506
+    name: "MPPT Charging Power"
+    update_interval: never
+    accuracy_decimals: 0
+    unit_of_measurement: "W"
+    state_class: measurement
+    device_class: power
+  - platform: template
+    id: mppt_1507
+    name: "MPPT Load Power"
+    update_interval: never
+    accuracy_decimals: 0
+    unit_of_measurement: "W"
+  - platform: template
+    id: mppt_1508
+    name: "MPPT External Temperature"
+    update_interval: never
+    accuracy_decimals: 1
+  - platform: template
+    id: mppt_1509
+    name: "MPPT Internal Temperature Probable"
+    update_interval: never
+    accuracy_decimals: 1
+    entity_category: diagnostic
+  - platform: template
+    id: mppt_150a
+    name: "MPPT Reported SOC"
+    update_interval: never
+    accuracy_decimals: 0
+    unit_of_measurement: "%"
+  - platform: template
+    id: mppt_150b
+    name: "MPPT Charging Active Raw"
+    update_interval: never
+    accuracy_decimals: 0
+    entity_category: diagnostic
+  - platform: template
+    id: mppt_150c
+    name: "MPPT Fault Bitmask Raw"
+    update_interval: never
+    accuracy_decimals: 0
+    entity_category: diagnostic
+  - platform: template
+    id: mppt_150d
+    name: "MPPT Total Generation"
+    update_interval: never
+    accuracy_decimals: 1
+    unit_of_measurement: "kWh"
+    state_class: total_increasing
+    device_class: energy
+  - platform: template
+    id: mppt_150e
+    name: "MPPT Unknown 150E"
+    update_interval: never
+    accuracy_decimals: 0
+    entity_category: diagnostic
+  - platform: template
+    id: mppt_150f
+    name: "MPPT Unknown 150F"
+    update_interval: never
+    accuracy_decimals: 0
+    entity_category: diagnostic
+  - platform: template
+    id: mppt_1510
+    name: "MPPT Unknown 1510"
+    update_interval: never
+    accuracy_decimals: 0
+    entity_category: diagnostic
+  - platform: template
+    id: mppt_1511
+    name: "MPPT Unknown 1511"
+    update_interval: never
+    accuracy_decimals: 0
+    entity_category: diagnostic
+  - platform: template
+    id: mppt_1512
+    name: "MPPT Temperature Unit Raw"
+    update_interval: never
+    accuracy_decimals: 0
+    entity_category: diagnostic
+  - platform: template
+    id: mppt_1513
+    name: "MPPT Load Mode Raw"
+    update_interval: never
+    accuracy_decimals: 0
+    entity_category: diagnostic
+  - platform: template
+    id: mppt_1514
+    name: "MPPT Load Output Raw"
+    update_interval: never
+    accuracy_decimals: 0
+    entity_category: diagnostic
+  - platform: template
+    id: mppt_1515
+    name: "MPPT Battery Chemistry Raw"
+    update_interval: never
+    accuracy_decimals: 0
+    entity_category: diagnostic
+  - platform: template
+    id: mppt_1516
+    name: "MPPT Battery System Voltage Raw"
+    update_interval: never
+    accuracy_decimals: 0
+    entity_category: diagnostic
+  - platform: template
+    id: mppt_1517
+    name: "MPPT Overdischarge Protection"
+    update_interval: never
+    accuracy_decimals: 1
+    unit_of_measurement: "V"
+  - platform: template
+    id: mppt_1518
+    name: "MPPT Overcharge Protection"
+    update_interval: never
+    accuracy_decimals: 1
+    unit_of_measurement: "V"
+  - platform: template
+    id: mppt_1519
+    name: "MPPT Overdischarge Recovery"
+    update_interval: never
+    accuracy_decimals: 1
+    unit_of_measurement: "V"
+  - platform: template
+    id: mppt_151a
+    name: "MPPT Overcharge Recovery"
+    update_interval: never
+    accuracy_decimals: 1
+    unit_of_measurement: "V"
+  - platform: template
+    id: mppt_151b
+    name: "MPPT Constant Charge Voltage"
+    update_interval: never
+    accuracy_decimals: 1
+    unit_of_measurement: "V"
+  - platform: template
+    id: mppt_151c
+    name: "MPPT Float Voltage Raw"
+    update_interval: never
+    accuracy_decimals: 0
+    entity_category: diagnostic
+  - platform: template
+    id: mppt_151d
+    name: "MPPT Equalization Voltage Raw"
+    update_interval: never
+    accuracy_decimals: 0
+    entity_category: diagnostic
+  - platform: template
+    id: mppt_151e
+    name: "MPPT Equalization Duration Raw"
+    update_interval: never
+    accuracy_decimals: 0
+    entity_category: diagnostic
+  - platform: template
+    id: mppt_151f
+    name: "MPPT Maximum Charge Current Probable"
+    update_interval: never
+    accuracy_decimals: 1
+    unit_of_measurement: "A"
+    entity_category: diagnostic
+  - platform: template
+    id: mppt_1520
+    name: "MPPT Unknown 1520"
+    update_interval: never
+    accuracy_decimals: 0
+    entity_category: diagnostic
+  - platform: template
+    id: mppt_1521
+    name: "MPPT Unknown 1521"
+    update_interval: never
+    accuracy_decimals: 0
+    entity_category: diagnostic
+  - platform: template
+    id: mppt_1600
+    name: "MPPT History Monthly Slot 01"
+    update_interval: never
+    accuracy_decimals: 1
+    unit_of_measurement: "kWh"
+    entity_category: diagnostic
+  - platform: template
+    id: mppt_1601
+    name: "MPPT History Monthly Slot 02"
+    update_interval: never
+    accuracy_decimals: 1
+    unit_of_measurement: "kWh"
+    entity_category: diagnostic
+  - platform: template
+    id: mppt_1602
+    name: "MPPT History Monthly Slot 03"
+    update_interval: never
+    accuracy_decimals: 1
+    unit_of_measurement: "kWh"
+    entity_category: diagnostic
+  - platform: template
+    id: mppt_1603
+    name: "MPPT History Monthly Slot 04"
+    update_interval: never
+    accuracy_decimals: 1
+    unit_of_measurement: "kWh"
+    entity_category: diagnostic
+  - platform: template
+    id: mppt_1604
+    name: "MPPT History Monthly Slot 05"
+    update_interval: never
+    accuracy_decimals: 1
+    unit_of_measurement: "kWh"
+    entity_category: diagnostic
+  - platform: template
+    id: mppt_1605
+    name: "MPPT History Monthly Slot 06"
+    update_interval: never
+    accuracy_decimals: 1
+    unit_of_measurement: "kWh"
+    entity_category: diagnostic
+  - platform: template
+    id: mppt_1606
+    name: "MPPT History Monthly Slot 07"
+    update_interval: never
+    accuracy_decimals: 1
+    unit_of_measurement: "kWh"
+    entity_category: diagnostic
+  - platform: template
+    id: mppt_1607
+    name: "MPPT History Monthly Slot 08"
+    update_interval: never
+    accuracy_decimals: 1
+    unit_of_measurement: "kWh"
+    entity_category: diagnostic
+  - platform: template
+    id: mppt_1608
+    name: "MPPT History Monthly Slot 09"
+    update_interval: never
+    accuracy_decimals: 1
+    unit_of_measurement: "kWh"
+    entity_category: diagnostic
+  - platform: template
+    id: mppt_1609
+    name: "MPPT History Monthly Slot 10"
+    update_interval: never
+    accuracy_decimals: 1
+    unit_of_measurement: "kWh"
+    entity_category: diagnostic
+  - platform: template
+    id: mppt_160a
+    name: "MPPT History Monthly Slot 11"
+    update_interval: never
+    accuracy_decimals: 1
+    unit_of_measurement: "kWh"
+    entity_category: diagnostic
+  - platform: template
+    id: mppt_160b
+    name: "MPPT History Monthly Slot 12"
+    update_interval: never
+    accuracy_decimals: 1
+    unit_of_measurement: "kWh"
+    entity_category: diagnostic
+  - platform: template
+    id: mppt_160c
+    name: "MPPT History Daily Slot 01"
+    update_interval: never
+    accuracy_decimals: 1
+    unit_of_measurement: "kWh"
+    entity_category: diagnostic
+  - platform: template
+    id: mppt_160d
+    name: "MPPT History Daily Slot 02"
+    update_interval: never
+    accuracy_decimals: 1
+    unit_of_measurement: "kWh"
+    entity_category: diagnostic
+  - platform: template
+    id: mppt_160e
+    name: "MPPT History Daily Slot 03"
+    update_interval: never
+    accuracy_decimals: 1
+    unit_of_measurement: "kWh"
+    entity_category: diagnostic
+  - platform: template
+    id: mppt_160f
+    name: "MPPT History Daily Slot 04"
+    update_interval: never
+    accuracy_decimals: 1
+    unit_of_measurement: "kWh"
+    entity_category: diagnostic
+  - platform: template
+    id: mppt_1610
+    name: "MPPT History Daily Slot 05"
+    update_interval: never
+    accuracy_decimals: 1
+    unit_of_measurement: "kWh"
+    entity_category: diagnostic
+  - platform: template
+    id: mppt_1611
+    name: "MPPT History Daily Slot 06"
+    update_interval: never
+    accuracy_decimals: 1
+    unit_of_measurement: "kWh"
+    entity_category: diagnostic
+  - platform: template
+    id: mppt_1612
+    name: "MPPT History Daily Slot 07"
+    update_interval: never
+    accuracy_decimals: 1
+    unit_of_measurement: "kWh"
+    entity_category: diagnostic
+  - platform: template
+    id: mppt_1613
+    name: "MPPT History Daily Slot 08"
+    update_interval: never
+    accuracy_decimals: 1
+    unit_of_measurement: "kWh"
+    entity_category: diagnostic
+  - platform: template
+    id: mppt_1614
+    name: "MPPT History Daily Slot 09"
+    update_interval: never
+    accuracy_decimals: 1
+    unit_of_measurement: "kWh"
+    entity_category: diagnostic
+  - platform: template
+    id: mppt_1615
+    name: "MPPT History Daily Slot 10"
+    update_interval: never
+    accuracy_decimals: 1
+    unit_of_measurement: "kWh"
+    entity_category: diagnostic
+  - platform: template
+    id: mppt_1616
+    name: "MPPT History Daily Slot 11"
+    update_interval: never
+    accuracy_decimals: 1
+    unit_of_measurement: "kWh"
+    entity_category: diagnostic
+  - platform: template
+    id: mppt_1617
+    name: "MPPT History Daily Slot 12"
+    update_interval: never
+    accuracy_decimals: 1
+    unit_of_measurement: "kWh"
+    entity_category: diagnostic
+  - platform: template
+    id: mppt_1618
+    name: "MPPT History Daily Slot 13"
+    update_interval: never
+    accuracy_decimals: 1
+    unit_of_measurement: "kWh"
+    entity_category: diagnostic
+  - platform: template
+    id: mppt_1619
+    name: "MPPT History Daily Slot 14"
+    update_interval: never
+    accuracy_decimals: 1
+    unit_of_measurement: "kWh"
+    entity_category: diagnostic
+  - platform: template
+    id: mppt_161a
+    name: "MPPT History Daily Slot 15"
+    update_interval: never
+    accuracy_decimals: 1
+    unit_of_measurement: "kWh"
+    entity_category: diagnostic
+  - platform: template
+    id: mppt_161b
+    name: "MPPT History Daily Slot 16"
+    update_interval: never
+    accuracy_decimals: 1
+    unit_of_measurement: "kWh"
+    entity_category: diagnostic
+  - platform: template
+    id: mppt_161c
+    name: "MPPT History Daily Slot 17"
+    update_interval: never
+    accuracy_decimals: 1
+    unit_of_measurement: "kWh"
+    entity_category: diagnostic
+  - platform: template
+    id: mppt_161d
+    name: "MPPT History Daily Slot 18"
+    update_interval: never
+    accuracy_decimals: 1
+    unit_of_measurement: "kWh"
+    entity_category: diagnostic
+  - platform: template
+    id: mppt_161e
+    name: "MPPT History Daily Slot 19"
+    update_interval: never
+    accuracy_decimals: 1
+    unit_of_measurement: "kWh"
+    entity_category: diagnostic
+  - platform: template
+    id: mppt_161f
+    name: "MPPT History Daily Slot 20"
+    update_interval: never
+    accuracy_decimals: 1
+    unit_of_measurement: "kWh"
+    entity_category: diagnostic
+  - platform: template
+    id: mppt_1620
+    name: "MPPT History Daily Slot 21"
+    update_interval: never
+    accuracy_decimals: 1
+    unit_of_measurement: "kWh"
+    entity_category: diagnostic
+  - platform: template
+    id: mppt_1621
+    name: "MPPT History Daily Slot 22"
+    update_interval: never
+    accuracy_decimals: 1
+    unit_of_measurement: "kWh"
+    entity_category: diagnostic
+  - platform: template
+    id: mppt_1622
+    name: "MPPT History Daily Slot 23"
+    update_interval: never
+    accuracy_decimals: 1
+    unit_of_measurement: "kWh"
+    entity_category: diagnostic
+  - platform: template
+    id: mppt_1623
+    name: "MPPT History Daily Slot 24"
+    update_interval: never
+    accuracy_decimals: 1
+    unit_of_measurement: "kWh"
+    entity_category: diagnostic
+  - platform: template
+    id: mppt_1624
+    name: "MPPT History Daily Slot 25"
+    update_interval: never
+    accuracy_decimals: 1
+    unit_of_measurement: "kWh"
+    entity_category: diagnostic
+  - platform: template
+    id: mppt_1625
+    name: "MPPT History Daily Slot 26"
+    update_interval: never
+    accuracy_decimals: 1
+    unit_of_measurement: "kWh"
+    entity_category: diagnostic
+  - platform: template
+    id: mppt_1626
+    name: "MPPT History Daily Slot 27"
+    update_interval: never
+    accuracy_decimals: 1
+    unit_of_measurement: "kWh"
+    entity_category: diagnostic
+  - platform: template
+    id: mppt_1627
+    name: "MPPT History Daily Slot 28"
+    update_interval: never
+    accuracy_decimals: 1
+    unit_of_measurement: "kWh"
+    entity_category: diagnostic
+  - platform: template
+    id: mppt_1628
+    name: "MPPT History Daily Slot 29"
+    update_interval: never
+    accuracy_decimals: 1
+    unit_of_measurement: "kWh"
+    entity_category: diagnostic
+  - platform: template
+    id: mppt_1629
+    name: "MPPT History Daily Slot 30"
+    update_interval: never
+    accuracy_decimals: 1
+    unit_of_measurement: "kWh"
+    entity_category: diagnostic
+  - platform: template
+    id: mppt_162a
+    name: "MPPT History Daily Slot 31"
+    update_interval: never
+    accuracy_decimals: 1
+    unit_of_measurement: "kWh"
+    entity_category: diagnostic
+
+  # ==========================================================
+  # BATTERY 1
+  # ==========================================================
+
+  - platform: jk_bms_ble
+    jk_bms_ble_id: battery1_bms
+
+    min_cell_voltage:
+      name: "${bms1_name} Min Cell Voltage"
+
+    max_cell_voltage:
+      name: "${bms1_name} Max Cell Voltage"
+
+    min_voltage_cell:
+      name: "${bms1_name} Min Voltage Cell"
+
+    max_voltage_cell:
+      name: "${bms1_name} Max Voltage Cell"
+
+    delta_cell_voltage:
+      name: "${bms1_name} Delta Cell Voltage"
+
+    average_cell_voltage:
+      name: "${bms1_name} Average Cell Voltage"
+
+    cell_voltage_1:
+      name: "${bms1_name} Cell Voltage 1"
+
+    cell_voltage_2:
+      name: "${bms1_name} Cell Voltage 2"
+
+    cell_voltage_3:
+      name: "${bms1_name} Cell Voltage 3"
+
+    cell_voltage_4:
+      name: "${bms1_name} Cell Voltage 4"
+
+    cell_voltage_5:
+      name: "${bms1_name} Cell Voltage 5"
+
+    cell_voltage_6:
+      name: "${bms1_name} Cell Voltage 6"
+
+    cell_voltage_7:
+      name: "${bms1_name} Cell Voltage 7"
+
+    cell_voltage_8:
+      name: "${bms1_name} Cell Voltage 8"
+
+    cell_voltage_9:
+      name: "${bms1_name} Cell Voltage 9"
+    cell_voltage_10:
+      name: "${bms1_name} Cell Voltage 10"
+
+    cell_voltage_11:
+      name: "${bms1_name} Cell Voltage 11"
+
+    cell_voltage_12:
+      name: "${bms1_name} Cell Voltage 12"
+
+    cell_voltage_13:
+      name: "${bms1_name} Cell Voltage 13"
+
+    cell_voltage_14:
+      name: "${bms1_name} Cell Voltage 14"
+
+    cell_voltage_15:
+      name: "${bms1_name} Cell Voltage 15"
+
+    cell_voltage_16:
+      name: "${bms1_name} Cell Voltage 16"
+
+    cell_resistance_1:
+      name: "${bms1_name} Cell Resistance 1"
+
+    cell_resistance_2:
+      name: "${bms1_name} Cell Resistance 2"
+
+    cell_resistance_3:
+      name: "${bms1_name} Cell Resistance 3"
+
+    cell_resistance_4:
+      name: "${bms1_name} Cell Resistance 4"
+
+    cell_resistance_5:
+      name: "${bms1_name} Cell Resistance 5"
+
+    cell_resistance_6:
+      name: "${bms1_name} Cell Resistance 6"
+
+    cell_resistance_7:
+      name: "${bms1_name} Cell Resistance 7"
+
+    cell_resistance_8:
+      name: "${bms1_name} Cell Resistance 8"
+
+    cell_resistance_9:
+      name: "${bms1_name} Cell Resistance 9"
+
+    cell_resistance_10:
+      name: "${bms1_name} Cell Resistance 10"
+
+    cell_resistance_11:
+      name: "${bms1_name} Cell Resistance 11"
+
+    cell_resistance_12:
+      name: "${bms1_name} Cell Resistance 12"
+
+    cell_resistance_13:
+      name: "${bms1_name} Cell Resistance 13"
+
+    cell_resistance_14:
+      name: "${bms1_name} Cell Resistance 14"
+
+    cell_resistance_15:
+      name: "${bms1_name} Cell Resistance 15"
+
+    cell_resistance_16:
+      name: "${bms1_name} Cell Resistance 16"
+
+    total_voltage:
+      name: "${bms1_name} Voltage"
+
+    current:
+      name: "${bms1_name} Current"
+
+    power:
+      name: "${bms1_name} Power"
+
+    charging_power:
+      name: "${bms1_name} Charge Power"
+      id: battery1_charge_power
+
+    discharging_power:
+      name: "${bms1_name} Discharge Power"
+      id: battery1_discharge_power
+
+    mosfet_temperature:
+      name: "${bms1_name} MOSFET Temperature"
+
+    temperature_sensor_1:
+      name: "${bms1_name} Temperature 1"
+
+    temperature_sensor_2:
+      name: "${bms1_name} Temperature 2"
+
+    balancing_current:
+      name: "${bms1_name} Balancing Current"
+
+    state_of_charge:
+      name: "${bms1_name} SOC"
+
+    capacity_remaining:
+      name: "${bms1_name} Capacity Remaining"
+
+    full_charge_capacity:
+      name: "${bms1_name} Full Charge Capacity"
+
+    charging_cycles:
+      name: "${bms1_name} Charging Cycles"
+
+    total_charging_cycle_capacity:
+      name: "${bms1_name} Total Charging Cycle Capacity"
+
+    total_runtime:
+      name: "${bms1_name} Total Runtime"
+
+  # ==========================================================
+  # BATTERY 2
+  # ==========================================================
+
+  - platform: jk_bms_ble
+    jk_bms_ble_id: battery2_bms
+
+    min_cell_voltage:
+      name: "${bms2_name} Min Cell Voltage"
+
+    max_cell_voltage:
+      name: "${bms2_name} Max Cell Voltage"
+
+    min_voltage_cell:
+      name: "${bms2_name} Min Voltage Cell"
+
+    max_voltage_cell:
+      name: "${bms2_name} Max Voltage Cell"
+
+    delta_cell_voltage:
+      name: "${bms2_name} Delta Cell Voltage"
+
+    average_cell_voltage:
+      name: "${bms2_name} Average Cell Voltage"
+
+    cell_voltage_1:
+      name: "${bms2_name} Cell Voltage 1"
+
+    cell_voltage_2:
+      name: "${bms2_name} Cell Voltage 2"
+
+    cell_voltage_3:
+      name: "${bms2_name} Cell Voltage 3"
+
+    cell_voltage_4:
+      name: "${bms2_name} Cell Voltage 4"
+
+    cell_voltage_5:
+      name: "${bms2_name} Cell Voltage 5"
+
+    cell_voltage_6:
+      name: "${bms2_name} Cell Voltage 6"
+
+    cell_voltage_7:
+      name: "${bms2_name} Cell Voltage 7"
+
+    cell_voltage_8:
+      name: "${bms2_name} Cell Voltage 8"
+
+    cell_voltage_9:
+      name: "${bms2_name} Cell Voltage 9"
+
+    cell_voltage_10:
+      name: "${bms2_name} Cell Voltage 10"
+
+    cell_voltage_11:
+      name: "${bms2_name} Cell Voltage 11"
+
+    cell_voltage_12:
+      name: "${bms2_name} Cell Voltage 12"
+
+    cell_voltage_13:
+      name: "${bms2_name} Cell Voltage 13"
+
+    cell_voltage_14:
+      name: "${bms2_name} Cell Voltage 14"
+
+    cell_voltage_15:
+      name: "${bms2_name} Cell Voltage 15"
+
+    cell_voltage_16:
+      name: "${bms2_name} Cell Voltage 16"
+
+    cell_resistance_1:
+      name: "${bms2_name} Cell Resistance 1"
+
+    cell_resistance_2:
+      name: "${bms2_name} Cell Resistance 2"
+
+    cell_resistance_3:
+      name: "${bms2_name} Cell Resistance 3"
+
+    cell_resistance_4:
+      name: "${bms2_name} Cell Resistance 4"
+
+    cell_resistance_5:
+      name: "${bms2_name} Cell Resistance 5"
+
+    cell_resistance_6:
+      name: "${bms2_name} Cell Resistance 6"
+
+    cell_resistance_7:
+      name: "${bms2_name} Cell Resistance 7"
+
+    cell_resistance_8:
+      name: "${bms2_name} Cell Resistance 8"
+
+    cell_resistance_9:
+      name: "${bms2_name} Cell Resistance 9"
+
+    cell_resistance_10:
+      name: "${bms2_name} Cell Resistance 10"
+
+    cell_resistance_11:
+      name: "${bms2_name} Cell Resistance 11"
+
+    cell_resistance_12:
+      name: "${bms2_name} Cell Resistance 12"
+
+    cell_resistance_13:
+      name: "${bms2_name} Cell Resistance 13"
+
+    cell_resistance_14:
+      name: "${bms2_name} Cell Resistance 14"
+
+    cell_resistance_15:
+      name: "${bms2_name} Cell Resistance 15"
+
+    cell_resistance_16:
+      name: "${bms2_name} Cell Resistance 16"
+
+    total_voltage:
+      name: "${bms2_name} Voltage"
+
+    current:
+      name: "${bms2_name} Current"
+
+    power:
+      name: "${bms2_name} Power"
+
+    charging_power:
+      name: "${bms2_name} Charge Power"
+      id: battery2_charge_power
+
+    discharging_power:
+      name: "${bms2_name} Discharge Power"
+      id: battery2_discharge_power
+
+    mosfet_temperature:
+      name: "${bms2_name} MOSFET Temperature"
+
+    temperature_sensor_1:
+      name: "${bms2_name} Temperature 1"
+
+    temperature_sensor_2:
+      name: "${bms2_name} Temperature 2"
+
+    balancing_current:
+      name: "${bms2_name} Balancing Current"
+
+    state_of_charge:
+      name: "${bms2_name} SOC"
+
+    capacity_remaining:
+      name: "${bms2_name} Capacity Remaining"
+
+    full_charge_capacity:
+      name: "${bms2_name} Full Charge Capacity"
+
+    charging_cycles:
+      name: "${bms2_name} Charging Cycles"
+
+    total_charging_cycle_capacity:
+      name: "${bms2_name} Total Charging Cycle Capacity"
+
+    total_runtime:
+      name: "${bms2_name} Total Runtime"
+
+  # ==========================================================
+  # COMBINED BATTERY BANK CHARGE POWER
+  # ==========================================================
+
+  - platform: template
+    name: "Battery Bank Charge Power"
+    id: battery_bank_charge_power
+    unit_of_measurement: W
+    device_class: power
+    state_class: measurement
+    accuracy_decimals: 1
+    update_interval: 5s
+    lambda: |-
+      float p1 = id(battery1_charge_power).state;
+      float p2 = id(battery2_charge_power).state;
+
+      if (isnan(p1)) p1 = 0;
+      if (isnan(p2)) p2 = 0;
+
+      return p1 + p2;
+
+  # ==========================================================
+  # COMBINED BATTERY BANK DISCHARGE POWER
+  # ==========================================================
+
+  - platform: template
+    name: "Battery Bank Discharge Power"
+    id: battery_bank_discharge_power
+    unit_of_measurement: W
+    device_class: power
+    state_class: measurement
+    accuracy_decimals: 1
+    update_interval: 5s
+    lambda: |-
+      float p1 = id(battery1_discharge_power).state;
+      float p2 = id(battery2_discharge_power).state;
+
+      if (isnan(p1)) p1 = 0;
+      if (isnan(p2)) p2 = 0;
+
+      return p1 + p2;
+
+  # ==========================================================
+  # NEW LIFETIME CUMULATIVE BATTERY CHARGE ENERGY
+  #
+  # IMPORTANT:
+  # This replaces the old total_daily_energy sensor.
+  #
+  # The sensor integrates watts over time and produces a
+  # continuously increasing kWh value.
+  #
+  # It DOES NOT reset at midnight.
+  #
+  # This is the entity to use in the Home Assistant
+  # Energy Dashboard.
+  # ==========================================================
+
+  - platform: integration
+    name: "Battery Bank Energy Charged Total"
+    id: battery_bank_energy_charged_total
+    sensor: battery_bank_charge_power
+    time_unit: h
+    restore: true
+    state_class: total_increasing
+    device_class: energy
+    unit_of_measurement: kWh
+    accuracy_decimals: 3
+    filters:
+      - multiply: 0.001
+
+  # ==========================================================
+  # NEW LIFETIME CUMULATIVE BATTERY DISCHARGE ENERGY
+  #
+  # This also does NOT reset at midnight.
+  # ==========================================================
+
+  - platform: integration
+    name: "Battery Bank Energy Discharged Total"
+    id: battery_bank_energy_discharged_total
+    sensor: battery_bank_discharge_power
+    time_unit: h
+    restore: true
+    state_class: total_increasing
+    device_class: energy
+    unit_of_measurement: kWh
+    accuracy_decimals: 3
+    filters:
+      - multiply: 0.001
+
+
+
+globals:
+  - id: mppt_battery_read_valid
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+  - id: mppt_battery_fc10_pending
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+  - id: mppt_battery_fc10_ack
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+  - id: mppt_battery_fc10_busy
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+  - id: mppt_battery_fc10_readback_done
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+  - id: mppt_battery_fc10_readback_ok
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+  - id: mppt_battery_fc10_verify
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+  - id: mppt_battery_fc10_expected
+    type: std::array<uint16_t, 10>
+    restore_value: no
+    initial_value: 'std::array<uint16_t, 10>{}'
+  - id: mppt_battery_read
+    type: std::array<uint16_t, 10>
+    restore_value: no
+    initial_value: 'std::array<uint16_t, 10>{}'
+  - id: mppt_poll_busy
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+  - id: mppt_temp_busy
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+  - id: mppt_temp_pending
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+  - id: mppt_temp_ack
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+  - id: mppt_temp_target
+    type: uint16_t
+    restore_value: no
+    initial_value: '0'
+  - id: mppt_load_busy
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+  - id: mppt_load_pending
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+  - id: mppt_load_ack
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+  - id: mppt_load_target
+    type: uint16_t
+    restore_value: no
+    initial_value: '0'
+  - id: mppt_write_pending
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+  - id: mppt_write_register
+    type: uint16_t
+    restore_value: no
+    initial_value: '0'
+  - id: mppt_write_value
+    type: uint16_t
+    restore_value: no
+    initial_value: '0'
+  - id: mppt_write_acknowledged
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+  - id: mppt_write_last_ok
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+
+switch:
+  # Actual output state comes from register 0x1514; never optimistic.
+  - platform: template
+    name: "MPPT Load Output"
+    id: mppt_load_output_switch
+    optimistic: false
+    restore_mode: DISABLED
+    turn_on_action:
+      - script.execute:
+          id: mppt_set_load
+          enable: true
+    turn_off_action:
+      - script.execute:
+          id: mppt_set_load
+          enable: false
+  # ----------------------------------------------------------
+  # BATTERY 1
+  # ----------------------------------------------------------
+
+  - platform: jk_bms_ble
+    jk_bms_ble_id: battery1_bms
+
+    charging:
+      name: "${bms1_name} Charging Switch"
+
+    discharging:
+      name: "${bms1_name} Discharging Switch"
+
+    balancer:
+      name: "${bms1_name} Balancer"
+
+    emergency:
+      name: "${bms1_name} Emergency"
+
+    heating:
+      name: "${bms1_name} Heating"
+
+    disable_temperature_sensors:
+      name: "${bms1_name} Disable Temperature Sensors"
+
+    display_always_on:
+      name: "${bms1_name} Display Always On"
+
+    smart_sleep:
+      name: "${bms1_name} Smart Sleep"
+
+    disable_pcl_module:
+      name: "${bms1_name} Disable PCL Module"
+
+    timed_stored_data:
+      name: "${bms1_name} Timed Stored Data"
+
+    charging_float_mode:
+      name: "${bms1_name} Charging Float Mode"
+
+  - platform: ble_client
+    ble_client_id: battery1_ble
+    name: "${bms1_name} Bluetooth"
+    id: battery1_ble_switch
+
+  # ----------------------------------------------------------
+  # BATTERY 2
+  # ----------------------------------------------------------
+
+  - platform: jk_bms_ble
+    jk_bms_ble_id: battery2_bms
+
+    charging:
+      name: "${bms2_name} Charging Switch"
+
+    discharging:
+      name: "${bms2_name} Discharging Switch"
+
+    balancer:
+      name: "${bms2_name} Balancer"
+
+    emergency:
+      name: "${bms2_name} Emergency"
+
+    heating:
+      name: "${bms2_name} Heating"
+
+    disable_temperature_sensors:
+      name: "${bms2_name} Disable Temperature Sensors"
+
+    display_always_on:
+      name: "${bms2_name} Display Always On"
+
+    smart_sleep:
+      name: "${bms2_name} Smart Sleep"
+
+    disable_pcl_module:
+      name: "${bms2_name} Disable PCL Module"
+
+    timed_stored_data:
+      name: "${bms2_name} Timed Stored Data"
+
+    charging_float_mode:
+      name: "${bms2_name} Charging Float Mode"
+
+  - platform: ble_client
+    ble_client_id: battery2_ble
+    name: "${bms2_name} Bluetooth"
+    id: battery2_ble_switch
+
+# ============================================================
+# TEXT SENSORS
+# ============================================================
+
+text_sensor:
+  - platform: template
+    name: "MPPT Battery Chemistry"
+    id: mppt_battery_chemistry_label
+    update_interval: never
+  - platform: template
+    name: "MPPT Battery System Voltage"
+    id: mppt_battery_system_voltage_label
+    update_interval: never
+  - platform: template
+    name: "MPPT Battery Save Status"
+    id: mppt_battery_save_status
+    entity_category: diagnostic
+    update_interval: never
+
+  # ----------------------------------------------------------
+  # BATTERY 1
+  # ----------------------------------------------------------
+
+  - platform: jk_bms_ble
+    jk_bms_ble_id: battery1_bms
+
+    errors:
+      name: "${bms1_name} Errors"
+
+    total_runtime_formatted:
+      name: "${bms1_name} Runtime"
+
+    charge_status:
+      name: "${bms1_name} Charge Status"
+
+    software_version:
+      name: "${bms1_name} Software Version"
+
+    hardware_version:
+      name: "${bms1_name} Hardware Version"
+
+  # ----------------------------------------------------------
+  # BATTERY 2
+  # ----------------------------------------------------------
+
+  - platform: jk_bms_ble
+    jk_bms_ble_id: battery2_bms
+
+    errors:
+      name: "${bms2_name} Errors"
+
+    total_runtime_formatted:
+      name: "${bms2_name} Runtime"
+
+    charge_status:
+      name: "${bms2_name} Charge Status"
+
+    software_version:
+      name: "${bms2_name} Software Version"
+
+    hardware_version:
+      name: "${bms2_name} Hardware Version"
+
+# ============================================================
+# BUTTONS
+# ============================================================
+
+button:
+
+  # ----------------------------------------------------------
+  # BATTERY 1
+  # ----------------------------------------------------------
+
+  - platform: jk_bms_ble
+    jk_bms_ble_id: battery1_bms
+
+    retrieve_settings:
+      name: "${bms1_name} Retrieve Settings"
+
+    retrieve_device_info:
+      name: "${bms1_name} Retrieve Device Info"
+
+  # ----------------------------------------------------------
+  # BATTERY 2
+  # ----------------------------------------------------------
+
+  - platform: jk_bms_ble
+    jk_bms_ble_id: battery2_bms
+
+    retrieve_settings:
+      name: "${bms2_name} Retrieve Settings"
+
+    retrieve_device_info:
+      name: "${bms2_name} Retrieve Device Info"
+
+
+  # Battery configuration is one OEM-observed FC10 transaction, not eight FC06 writes.
+  - platform: template
+    name: "MPPT Save Battery Configuration"
+    id: mppt_save_battery_config
+    entity_category: config
+    on_press:
+      - script.execute: mppt_write_battery_config
+
+# ============================================================
+# HOME ASSISTANT TIME
+# ============================================================
+
+time:
+  - platform: homeassistant
+    id: homeassistant_time
+
+# ============================================================
+# END
+# ============================================================
+
+
+# Active RS485 master. Disconnect the original BT-02 dongle.
+# MPPT editable values are staging controls; press the single Save button.
+# Writes are allowed only inside the Save script and are disabled after completion.
+select:
+  - platform: template
+    name: "MPPT Draft Battery Type"
+    id: mppt_draft_battery_type
+    optimistic: true
+    options: ["LiFePO4", "Lead Acid", "AGM", "Gel", "Custom"]
+  - platform: template
+    name: "MPPT Draft System Voltage"
+    id: mppt_draft_system_voltage
+    optimistic: true
+    options: ["Auto Detect", "12 V", "24 V", "36 V", "48 V"]
+  - platform: template
+    name: "MPPT Draft Temperature Unit"
+    id: mppt_draft_temperature_unit
+    optimistic: false
+    options: ["Celsius", "Fahrenheit"]
+    set_action:
+      - script.execute:
+          id: mppt_set_temperature_unit
+          fahrenheit: !lambda 'return x == "Fahrenheit";'
+
+number:
+  - platform: template
+    name: "MPPT Draft Overdischarge Protection"
+    id: mppt_draft_overdischarge_protection
+    optimistic: true
+    min_value: 0
+    max_value: 65.5
+    step: 0.1
+    mode: box
+    unit_of_measurement: "V"
+  - platform: template
+    name: "MPPT Draft Overcharge Protection"
+    id: mppt_draft_overcharge_protection
+    optimistic: true
+    min_value: 0
+    max_value: 65.5
+    step: 0.1
+    mode: box
+    unit_of_measurement: "V"
+  - platform: template
+    name: "MPPT Draft Overdischarge Recovery"
+    id: mppt_draft_overdischarge_recovery
+    optimistic: true
+    min_value: 0
+    max_value: 65.5
+    step: 0.1
+    mode: box
+    unit_of_measurement: "V"
+  - platform: template
+    name: "MPPT Draft Overcharge Recovery"
+    id: mppt_draft_overcharge_recovery
+    optimistic: true
+    min_value: 0
+    max_value: 65.5
+    step: 0.1
+    mode: box
+    unit_of_measurement: "V"
+  - platform: template
+    name: "MPPT Draft Constant Charge Voltage"
+    id: mppt_draft_constant_charge_voltage
+    optimistic: true
+    min_value: 0
+    max_value: 65.5
+    step: 0.1    mode: box
+    unit_of_measurement: "V"
+  - platform: template
+    name: "MPPT Draft Float Voltage"
+    id: mppt_draft_float_voltage
+    optimistic: true
+    min_value: 0
+    max_value: 65.5
+    step: 0.1
+    mode: box
+    unit_of_measurement: "V"
+  - platform: template
+    name: "MPPT Draft Equalization Voltage"
+    id: mppt_draft_equalization_voltage
+    optimistic: true
+    min_value: 0
+    max_value: 65.5
+    step: 0.1
+    mode: box
+    unit_of_measurement: "V"
+  - platform: template
+    name: "MPPT Draft Equalization Duration Raw"
+    id: mppt_draft_equalization_duration
+    optimistic: true
+    min_value: 0
+    max_value: 65535
+    step: 1
+    mode: box
+
+uart:
+  id: rs485_uart
+  rx_pin: ${rs485_rx_pin}
+  tx_pin: ${rs485_tx_pin}
+  baud_rate: 115200
+  data_bits: 8
+  parity: NONE
+  stop_bits: 1
+  rx_buffer_size: 512
+  debug:
+    direction: RX
+    dummy_receiver: true
+    after:
+      timeout: 80ms
+    sequence:
+      - lambda: |-
+          ESP_LOGI("mppt_uart", "Received %u raw UART bytes", (unsigned)bytes.size());
+          for (size_t k = 0; k < bytes.size(); k += 16) {
+            char line[16 * 3 + 1];
+            size_t n = std::min((size_t)16, bytes.size() - k);
+            for (size_t j = 0; j < n; j++) snprintf(line + j * 3, sizeof(line) - j * 3, "%02X ", bytes[k + j]);
+            line[n * 3] = '\0';
+            ESP_LOGI("mppt_uart", "RX: %s", line);
+          }
+          static std::vector<uint8_t> buffer;
+          buffer.insert(buffer.end(), bytes.begin(), bytes.end());
+          auto crc16 = [](const uint8_t *data, size_t len) -> uint16_t {
+            uint16_t crc = 0xFFFF;
+            for (size_t j = 0; j < len; j++) {
+              crc ^= data[j];
+              for (int b = 0; b < 8; b++)
+                crc = (crc & 1) ? (crc >> 1) ^ 0xA001 : crc >> 1;
+            }
+            return crc;
+          };
+          while (buffer.size() >= 5) {
+            // Modbus FC06 echo: slave, function, address, value, CRC (8 bytes).
+            // FC86 exception: slave, function, exception code, CRC (5 bytes).
+            // OEM-observed FC10 battery block acknowledgment: 01 10 15 15 00 0A CRC16.
+            if (id(mppt_battery_fc10_pending) && buffer[0] == 0x01 &&
+                (buffer[1] == 0x10 || buffer[1] == 0x90)) {
+              size_t n = buffer[1] == 0x10 ? 8 : 5;
+              if (buffer.size() < n) break;
+              uint16_t got = crc16(buffer.data(), n - 2);
+              uint16_t wire = buffer[n-2] | (uint16_t(buffer[n-1]) << 8);
+              if (got == wire) {
+                if (buffer[1] == 0x10) {
+                  bool matched = buffer[2] == 0x15 && buffer[3] == 0x15 &&
+                                 buffer[4] == 0x00 && buffer[5] == 0x0A;
+                  id(mppt_battery_fc10_ack) = matched;
+                  id(mppt_battery_fc10_verify) = matched;
+                  if (!matched) id(mppt_battery_save_status).publish_state("Failed: incorrect FC10 acknowledgment");
+                  ESP_LOGI("mppt_fc10", "Battery block ACK match=%s", matched ? "YES" : "NO");
+                } else {
+                  ESP_LOGW("mppt_fc10", "Controller exception 0x%02X", buffer[2]);
+                  id(mppt_battery_save_status).publish_state("Failed: Modbus exception");
+                }
+                id(mppt_battery_fc10_pending) = false;
+                buffer.erase(buffer.begin(), buffer.begin()+n);
+                continue;
+              }
+            }
+            // Temperature-unit FC10 acknowledgment: register 0x1512, count 1.
+            if (id(mppt_temp_pending) && buffer[0] == 0x01 &&
+                (buffer[1] == 0x10 || buffer[1] == 0x90)) {
+              size_t n = buffer[1] == 0x10 ? 8 : 5;
+              if (buffer.size() < n) break;
+              uint16_t got = crc16(buffer.data(), n - 2);
+              uint16_t wire = buffer[n-2] | (uint16_t(buffer[n-1]) << 8);
+              if (got == wire) {
+                id(mppt_temp_ack) = buffer[1] == 0x10 &&
+                    buffer[2] == 0x15 && buffer[3] == 0x12 &&
+                    buffer[4] == 0x00 && buffer[5] == 0x01;
+                if (!id(mppt_temp_ack)) ESP_LOGW("mppt_temp", "Temperature-unit FC10 exception or ACK mismatch (function=0x%02X)", buffer[1]);
+                id(mppt_temp_pending) = false;
+                buffer.erase(buffer.begin(), buffer.begin() + n);
+                continue;
+              }
+            }
+            // OEM load-mode FC10 acknowledgment: register 0x1513, count 1.
+            if (id(mppt_load_pending) && buffer[0] == 0x01 &&
+                (buffer[1] == 0x10 || buffer[1] == 0x90)) {
+              size_t n = buffer[1] == 0x10 ? 8 : 5;
+              if (buffer.size() < n) break;
+              uint16_t got = crc16(buffer.data(), n - 2);
+              uint16_t wire = buffer[n-2] | (uint16_t(buffer[n-1]) << 8);
+              if (got == wire) {
+                id(mppt_load_ack) = buffer[1] == 0x10 &&
+                    buffer[2] == 0x15 && buffer[3] == 0x13 &&
+                    buffer[4] == 0x00 && buffer[5] == 0x01;
+                if (!id(mppt_load_ack)) ESP_LOGW("mppt_load", "Load write rejected or ACK mismatch");
+                id(mppt_load_pending) = false;
+                buffer.erase(buffer.begin(), buffer.begin() + n);
+                continue;
+              }
+            }
+            if (id(mppt_write_pending) && buffer[0] == 0x01 &&
+                (buffer[1] == 0x06 || buffer[1] == 0x86)) {
+              size_t n = (buffer[1] == 0x06) ? 8 : 5;
+              if (buffer.size() < n) break;
+              uint16_t actual = crc16(buffer.data(), n-2);
+              uint16_t expected = buffer[n-2] | (uint16_t(buffer[n-1]) << 8);
+              if (actual == expected) {
+                if (buffer[1] == 0x06) {
+                  uint16_t reg = (uint16_t(buffer[2]) << 8) | buffer[3];
+                  uint16_t val = (uint16_t(buffer[4]) << 8) | buffer[5];
+                  id(mppt_write_last_ok) = (reg == id(mppt_write_register) && val == id(mppt_write_value));
+                  ESP_LOGI("mppt_write", "FC06 ACK register 0x%04X value %u match=%s", reg, val, id(mppt_write_last_ok) ? "YES" : "NO");
+                } else {
+                  id(mppt_write_last_ok) = false;
+                  ESP_LOGW("mppt_write", "Modbus exception 0x%02X", buffer[2]);
+                }
+                id(mppt_write_acknowledged) = true;
+                buffer.erase(buffer.begin(), buffer.begin()+n);
+                continue;
+              }
+            }
+            // Parse slave 1, function 03 responses (not requests).
+            size_t pos = 0;
+            while (pos + 2 < buffer.size() &&
+                   !(buffer[pos] == 0x01 && buffer[pos+1] == 0x03 &&
+                     (buffer[pos+2] == 0x44 || buffer[pos+2] == 0x56))) pos++;
+            if (pos) buffer.erase(buffer.begin(), buffer.begin()+pos);
+            if (buffer.size() < 5) break;
+            size_t count = buffer[2];
+            size_t frame_len = 3 + count + 2;
+            if (buffer.size() < frame_len) break;
+            uint16_t actual = crc16(buffer.data(), frame_len-2);
+            uint16_t expected = buffer[frame_len-2] | (uint16_t(buffer[frame_len-1]) << 8);
+            if (actual != expected) { ESP_LOGW("mppt_rx", "CRC mismatch in response, expected 0x%04X, calculated 0x%04X", expected, actual); buffer.erase(buffer.begin()); continue; }
+            ESP_LOGI("mppt_rx", "Valid Modbus response: %u data bytes", (unsigned)count);
+            uint16_t raw[43] = {};
+            for (size_t i = 0; i < count/2; i++)
+              raw[i] = (uint16_t(buffer[3+i*2]) << 8) | buffer[4+i*2];
+            if (count == 0x44) {
+              for (int i = 0; i < 10; i++) id(mppt_battery_read)[i] = raw[21+i];
+              id(mppt_battery_read_valid) = true;
+              if (id(mppt_battery_fc10_verify)) {
+                bool match = true;
+                for (int i = 0; i < 10; i++) {
+                  if (raw[21+i] != id(mppt_battery_fc10_expected)[i]) {
+                    ESP_LOGW("mppt_fc10", "READBACK MISMATCH 0x%04X expected %u actual %u",
+                             0x1515+i, id(mppt_battery_fc10_expected)[i], raw[21+i]);
+                    match = false;
+                  }
+                }
+                ESP_LOGI("mppt_fc10", "BATTERY CONFIG READBACK %s", match ? "VERIFIED" : "FAILED");
+                id(mppt_battery_fc10_readback_ok) = match;
+                id(mppt_battery_fc10_readback_done) = true;
+                id(mppt_battery_save_status).publish_state(match ? "Saved and verified" : "Failed: readback mismatch");
+                id(mppt_battery_fc10_verify) = false;
+              }
+              // Publish readable labels from the ACTUAL controller registers on every poll.
+              // Do not derive these labels from unsaved draft selections.
+              switch (raw[21]) {
+                case 0: id(mppt_battery_chemistry_label).publish_state("Custom"); break;
+                case 4: id(mppt_battery_chemistry_label).publish_state("LiFePO4"); break;
+                default: id(mppt_battery_chemistry_label).publish_state("Unknown (" + std::to_string(raw[21]) + ")"); break;
+              }
+              switch (raw[22]) {
+                case 0: id(mppt_battery_system_voltage_label).publish_state("Auto Detect"); break;
+                case 1: id(mppt_battery_system_voltage_label).publish_state("12 V"); break;
+                case 2: id(mppt_battery_system_voltage_label).publish_state("24 V"); break;
+                case 3: id(mppt_battery_system_voltage_label).publish_state("36 V"); break;
+                case 4: id(mppt_battery_system_voltage_label).publish_state("48 V"); break;
+                default: id(mppt_battery_system_voltage_label).publish_state("Unknown (" + std::to_string(raw[22]) + ")"); break;
+              }
+              // Seed staging controls once per boot. Changes require explicit Apply.
+              static bool draft_initialized = false;
+              if (!draft_initialized) {
+                draft_initialized = true;
+                if (raw[21] == 4) id(mppt_draft_battery_type).publish_state("LiFePO4");
+                if (raw[21] == 0) id(mppt_draft_battery_type).publish_state("Custom");
+                if (raw[22] == 4) id(mppt_draft_system_voltage).publish_state("48 V");
+                if (raw[22] == 0) id(mppt_draft_system_voltage).publish_state("Auto Detect");
+                if (raw[23] != 65535) id(mppt_draft_overdischarge_protection).publish_state(raw[23] * 0.1f);
+                if (raw[24] != 65535) id(mppt_draft_overcharge_protection).publish_state(raw[24] * 0.1f);
+                if (raw[25] != 65535) id(mppt_draft_overdischarge_recovery).publish_state(raw[25] * 0.1f);
+                if (raw[26] != 65535) id(mppt_draft_overcharge_recovery).publish_state(raw[26] * 0.1f);
+                if (raw[27] != 65535) id(mppt_draft_constant_charge_voltage).publish_state(raw[27] * 0.1f);
+                if (raw[28] != 65535) id(mppt_draft_float_voltage).publish_state(raw[28] * 0.1f);
+                if (raw[29] != 65535) id(mppt_draft_equalization_voltage).publish_state(raw[29] * 0.1f);
+                if (raw[30] != 65535) id(mppt_draft_equalization_duration).publish_state((float)raw[30]);
+              }
+              // The next regular read confirms the actual stored register value.
+              if (id(mppt_write_acknowledged) && id(mppt_write_last_ok) &&
+                  id(mppt_write_register) >= 0x1500 && id(mppt_write_register) <= 0x1521) {
+                uint16_t idx = id(mppt_write_register) - 0x1500;
+                if (raw[idx] == id(mppt_write_value))
+                  ESP_LOGI("mppt_write", "READBACK VERIFIED 0x%04X = %u", id(mppt_write_register), raw[idx]);
+                else
+                  ESP_LOGW("mppt_write", "READBACK MISMATCH 0x%04X expected %u actual %u", id(mppt_write_register), id(mppt_write_value), raw[idx]);
+                id(mppt_write_acknowledged) = false;
+              }
+              id(mppt_1500).publish_state((float)raw[0] * 1.0f);
+              id(mppt_1501).publish_state((float)raw[1] * 0.1f);
+              id(mppt_1502).publish_state((float)raw[2] * 0.1f);
+              id(mppt_1503).publish_state((float)raw[3] * 0.1f);
+              id(mppt_1504).publish_state((float)raw[4] * 0.1f);
+              id(mppt_1505).publish_state((float)raw[5] * 0.1f);
+              id(mppt_1506).publish_state((float)raw[6] * 1.0f);
+              id(mppt_1507).publish_state((float)raw[7] * 1.0f);
+              id(mppt_1508).publish_state((float)raw[8]);
+              id(mppt_1509).publish_state((float)raw[9]);
+              id(mppt_150a).publish_state((float)raw[10] * 1.0f);
+              id(mppt_150b).publish_state((float)raw[11] * 1.0f);
+              id(mppt_150c).publish_state((float)raw[12] * 1.0f);
+              id(mppt_150d).publish_state((float)raw[13] * 0.1f);
+              id(mppt_150e).publish_state((float)raw[14] * 1.0f);
+              id(mppt_150f).publish_state((float)raw[15] * 1.0f);
+              id(mppt_1510).publish_state((float)raw[16] * 1.0f);
+              id(mppt_1511).publish_state((float)raw[17] * 1.0f);
+              id(mppt_1512).publish_state((float)raw[18] * 1.0f);
+              // Controller is authoritative: synchronize the selector on EVERY valid read.
+              // Do not optimistically publish the requested unit.
+              if (raw[18] == 0 || raw[18] == 1) {
+                id(mppt_draft_temperature_unit).publish_state(raw[18] == 1 ? "Fahrenheit" : "Celsius");
+                if (id(mppt_temp_busy)) {
+                  ESP_LOGI("mppt_temp", "Controller readback: unit=%u requested=%u verified=%s",
+                           raw[18], id(mppt_temp_target),
+                           (id(mppt_temp_ack) && raw[18] == id(mppt_temp_target)) ? "YES" : "NO");
+                }
+              } else {
+                ESP_LOGW("mppt_temp", "Unexpected temperature unit register value: %u", raw[18]);
+              }
+              id(mppt_1513).publish_state((float)raw[19] * 1.0f);
+              id(mppt_1514).publish_state((float)raw[20] * 1.0f);
+              // Publish only observed hardware state, not requested state.
+              if (raw[20] == 0 || raw[20] == 1)
+                id(mppt_load_output_switch).publish_state(raw[20] == 1);
+              if (id(mppt_load_busy) && raw[19] == id(mppt_load_target) &&
+                  raw[20] == (id(mppt_load_target) == 0x13FC ? 1 : 0))
+                ESP_LOGI("mppt_load", "Load mode and output readback verified");
+              id(mppt_1515).publish_state((float)raw[21] * 1.0f);
+              id(mppt_1516).publish_state((float)raw[22] * 1.0f);
+              id(mppt_1517).publish_state((float)raw[23] * 0.1f);
+              id(mppt_1518).publish_state((float)raw[24] * 0.1f);
+              id(mppt_1519).publish_state((float)raw[25] * 0.1f);
+              id(mppt_151a).publish_state((float)raw[26] * 0.1f);
+              id(mppt_151b).publish_state((float)raw[27] * 0.1f);
+              id(mppt_151c).publish_state((raw[28] == 65535 ? NAN : (float)raw[28] * 0.1f));
+              id(mppt_151d).publish_state((raw[29] == 65535 ? NAN : (float)raw[29] * 0.1f));
+              id(mppt_151e).publish_state((raw[30] == 65535 ? NAN : (float)raw[30]));
+              id(mppt_151f).publish_state((float)raw[31] * 0.1f);
+              id(mppt_1520).publish_state((float)raw[32] * 1.0f);
+              id(mppt_1521).publish_state((float)raw[33] * 1.0f);
+              id(mppt_overvoltage_fault).publish_state((raw[12] & 0x0001) != 0);
+              id(mppt_low_voltage_fault).publish_state((raw[12] & 0x0080) != 0);
+            } else if (count == 0x56) {
+              id(mppt_1600).publish_state((float)raw[0] * 0.1f);
+              id(mppt_1601).publish_state((float)raw[1] * 0.1f);
+              id(mppt_1602).publish_state((float)raw[2] * 0.1f);
+              id(mppt_1603).publish_state((float)raw[3] * 0.1f);
+              id(mppt_1604).publish_state((float)raw[4] * 0.1f);
+              id(mppt_1605).publish_state((float)raw[5] * 0.1f);
+              id(mppt_1606).publish_state((float)raw[6] * 0.1f);
+              id(mppt_1607).publish_state((float)raw[7] * 0.1f);
+              id(mppt_1608).publish_state((float)raw[8] * 0.1f);
+              id(mppt_1609).publish_state((float)raw[9] * 0.1f);
+              id(mppt_160a).publish_state((float)raw[10] * 0.1f);
+              id(mppt_160b).publish_state((float)raw[11] * 0.1f);
+              id(mppt_160c).publish_state((float)raw[12] * 0.1f);
+              id(mppt_160d).publish_state((float)raw[13] * 0.1f);
+              id(mppt_160e).publish_state((float)raw[14] * 0.1f);
+              id(mppt_160f).publish_state((float)raw[15] * 0.1f);
+              id(mppt_1610).publish_state((float)raw[16] * 0.1f);
+              id(mppt_1611).publish_state((float)raw[17] * 0.1f);
+              id(mppt_1612).publish_state((float)raw[18] * 0.1f);
+              id(mppt_1613).publish_state((float)raw[19] * 0.1f);
+              id(mppt_1614).publish_state((float)raw[20] * 0.1f);
+              id(mppt_1615).publish_state((float)raw[21] * 0.1f);
+              id(mppt_1616).publish_state((float)raw[22] * 0.1f);
+              id(mppt_1617).publish_state((float)raw[23] * 0.1f);
+              id(mppt_1618).publish_state((float)raw[24] * 0.1f);
+              id(mppt_1619).publish_state((float)raw[25] * 0.1f);
+              id(mppt_161a).publish_state((float)raw[26] * 0.1f);
+              id(mppt_161b).publish_state((float)raw[27] * 0.1f);
+              id(mppt_161c).publish_state((float)raw[28] * 0.1f);
+              id(mppt_161d).publish_state((float)raw[29] * 0.1f);
+              id(mppt_161e).publish_state((float)raw[30] * 0.1f);
+              id(mppt_161f).publish_state((float)raw[31] * 0.1f);
+              id(mppt_1620).publish_state((float)raw[32] * 0.1f);
+              id(mppt_1621).publish_state((float)raw[33] * 0.1f);
+              id(mppt_1622).publish_state((float)raw[34] * 0.1f);
+              id(mppt_1623).publish_state((float)raw[35] * 0.1f);
+              id(mppt_1624).publish_state((float)raw[36] * 0.1f);
+              id(mppt_1625).publish_state((float)raw[37] * 0.1f);
+              id(mppt_1626).publish_state((float)raw[38] * 0.1f);
+              id(mppt_1627).publish_state((float)raw[39] * 0.1f);
+              id(mppt_1628).publish_state((float)raw[40] * 0.1f);
+              id(mppt_1629).publish_state((float)raw[41] * 0.1f);
+              id(mppt_162a).publish_state((float)raw[42] * 0.1f);
+            }
+            buffer.erase(buffer.begin(), buffer.begin()+frame_len);
+          }
+          if (buffer.size() > 256) buffer.erase(buffer.begin(), buffer.end()-256);
+
+# ============================================================
+# ACTIVE MODBUS READ-ONLY POLLING
+# GPIO18 HIGH enables MAX3485 transmit, LOW enables receive.
+# DE and /RE must both be wired to GPIO18.
+# The UART RX debug decoder above retains existing HA sensor IDs.
+# Requests: 01 03 15 00 00 22 C1 DF and 01 03 16 00 00 2B 01 9D.
+# Do NOT connect BT-02 at the same time as this active master.
+# ============================================================
+output:
+  - platform: gpio
+    id: rs485_direction_output
+    pin: ${rs485_direction_pin}
+  - platform: gpio
+    id: mppt_status_led_output
+    pin: GPIO15
+    inverted: true
+
+light:
+  - platform: binary
+    id: mppt_status_led
+    name: "MPPT Status LED"
+    output: mppt_status_led_output
+    restore_mode: ALWAYS_OFF
+    entity_category: diagnostic
+
+script:
+  # Single Save transaction: validate -> exclusive bus -> FC10 -> ACK -> FC03 readback -> unlock.
+  # No public write-enable switch, no automatic writes, and no FC06 writes.
+  - id: mppt_write_battery_config
+    mode: single
+    then:
+      - if:
+          condition:
+            lambda: 'return id(mppt_battery_read_valid) && !id(mppt_battery_fc10_busy) && !id(mppt_poll_busy) && !id(mppt_write_pending) && !id(mppt_load_busy) && !id(mppt_temp_busy);'
+          then:
+            - lambda: |-
+                id(mppt_battery_save_status).publish_state("Validating settings");
+            # Validate in a condition; unlike a lambda action, false STOPS the write path.
+            - if:
+                condition:
+                  lambda: |-
+                    const auto &current = id(mppt_battery_read);
+                    auto chemistry = id(mppt_draft_battery_type).current_option();
+                    auto system = id(mppt_draft_system_voltage).current_option();
+                    // Codes: Custom=0, LiFePO4=4, Auto Detect voltage=0, 48V=4.
+                    // Auto Detect is selectable but writes remain guarded until tested.
+                    // Preserve current chemistry and voltage if the UI has not changed them.
+                    uint16_t chem = chemistry == "Custom" ? 0 : chemistry == "LiFePO4" ? 4 : 65535;
+                    uint16_t volts = system == "Auto Detect" ? 0 : system == "48 V" ? 4 : 65535;
+                    if (chem == 65535 || volts == 65535 || volts == 0 ||
+                        (chem != current[0] && chem != 0)) {
+                      ESP_LOGW("mppt_fc10", "BLOCKED: unsupported battery chemistry/voltage selection");
+                      id(mppt_battery_save_status).publish_state("Blocked: unsupported chemistry or voltage");
+                      return false;
+                    }
+                    float v[7] = {
+                      id(mppt_draft_overdischarge_protection).state,
+                      id(mppt_draft_overcharge_protection).state,
+                      id(mppt_draft_overdischarge_recovery).state,
+                      id(mppt_draft_overcharge_recovery).state,
+                      id(mppt_draft_constant_charge_voltage).state,
+                      id(mppt_draft_float_voltage).state,
+                      id(mppt_draft_equalization_voltage).state
+                    };
+                    uint16_t r[10];
+                    for (int i = 0; i < 10; ++i) r[i] = current[i];
+                    r[0] = chem;
+                    r[1] = volts;
+                    // Battery configuration thresholds, NOT the measured battery voltage.
+                    // An unused register can be 0xFFFF. Never turn it into 0.0 V.
+                    const char *field_names[7] = {
+                      "Overdischarge Protection", "Overcharge Protection",
+                      "Overdischarge Recovery", "Overcharge Recovery",
+                      "Constant Charging Voltage", "Float Voltage", "Equalization Voltage"
+                    };
+                    for (int i = 0; i < 7; ++i) {
+                      const bool optional = i >= 5;
+                      // Preset chemistries own the optional registers: ignore stale UI drafts.
+                      if (optional && chem != 0) continue;
+                      // A missing/zero optional UI draft means 'leave controller value alone'.
+                      // In particular, 0xFFFF is an intentional unset sentinel.
+                      if (optional && (!std::isfinite(v[i]) || v[i] <= 0.0f)) continue;
+                      if (std::isfinite(v[i])) {
+                        if (v[i] < 0.0f || v[i] > 65.5f) {
+                          char message[110];
+                          snprintf(message, sizeof(message), "Blocked: %s = %.1f V (invalid)", field_names[i], v[i]);
+                          id(mppt_battery_save_status).publish_state(message);
+                          ESP_LOGW("mppt_fc10", "%s", message);
+                          return false;
+                        }
+                        r[i+2] = (uint16_t) lroundf(v[i] * 10.0f);
+                      }
+                      if (optional && r[i+2] == 0xFFFF) continue;
+                      if (r[i+2] < 350 || r[i+2] > 650) {
+                        char message[110];
+                        snprintf(message, sizeof(message), "Blocked: %s = %.1f V (requires 35-65V)",
+                                 field_names[i], r[i+2] * 0.1f);
+                        id(mppt_battery_save_status).publish_state(message);
+                        ESP_LOGW("mppt_fc10", "%s", message);
+                        return false;
+                      }
+                    }
+                    // Equalization duration is meaningful only for Custom chemistry.
+                    if (chem == 0) {
+                      float mins = id(mppt_draft_equalization_duration).state;
+                      if (std::isfinite(mins) && mins > 0.0f) {
+                        if (mins > 240.0f || floorf(mins) != mins) {
+                          id(mppt_battery_save_status).publish_state("Blocked: invalid equalization duration");
+                          return false;
+                        }
+                        r[9] = (uint16_t) mins;
+                      }
+                      if (r[9] != 0xFFFF && r[9] > 240) {
+                        id(mppt_battery_save_status).publish_state("Blocked: equalization duration >240");
+                        return false;
+                      }
+                    }
+                    if (!(r[2] < r[4] && r[4] < r[3] && r[5] <= r[3] && r[6] <= r[3])) {
+                      id(mppt_battery_save_status).publish_state("Blocked: inconsistent protection thresholds");
+                      return false;
+                    }
+                    // Do not turn equalization on accidentally for a LiFePO4 profile.
+                    if (chem == 4 &&
+                        (r[7] != current[7] || r[8] != current[8] || r[9] != current[9])) {
+                      id(mppt_battery_save_status).publish_state("Blocked: optional charge fields changed in LiFePO4 mode");
+                      return false;
+                    }
+                    for (int i = 0; i < 10; ++i) id(mppt_battery_fc10_expected)[i] = r[i];
+                    return true;
+                then:
+                  - lambda: |-
+                      id(mppt_battery_fc10_busy) = true;
+                      id(mppt_battery_fc10_ack) = false;
+                      id(mppt_battery_fc10_verify) = false;
+                      id(mppt_battery_fc10_readback_done) = false;
+                      id(mppt_battery_fc10_readback_ok) = false;
+                      id(mppt_battery_fc10_pending) = true;
+                      id(mppt_battery_save_status).publish_state("Saving: waiting for controller ACK");
+                      uint8_t frame[29] = {0x01,0x10,0x15,0x15,0x00,0x0A,0x14};
+                      for (int i = 0; i < 10; ++i) {
+                        uint16_t r = id(mppt_battery_fc10_expected)[i];
+                        frame[7+i*2] = r >> 8;
+                        frame[8+i*2] = r & 0xFF;
+                      }
+                      uint16_t crc = 0xFFFF;
+                      for (int i = 0; i < 27; ++i) {
+                        crc ^= frame[i];
+                        for (int b = 0; b < 8; ++b)
+                          crc = (crc & 1) ? (crc >> 1) ^ 0xA001 : crc >> 1;
+                      }
+                      frame[27] = crc & 0xFF;
+                      frame[28] = crc >> 8;
+                      ESP_LOGI("mppt_fc10", "Saving 10 battery configuration registers via FC10");
+                      id(rs485_direction_output).turn_on();
+                      delay(2);
+                      id(rs485_uart).write_array(frame, sizeof(frame));
+                      id(rs485_uart).flush();
+                      delayMicroseconds(175);
+                      id(rs485_direction_output).turn_off();
+                  - delay: 400ms
+                  - if:
+                      condition:
+                        lambda: 'return id(mppt_battery_fc10_ack);'
+                      then:
+                        - lambda: |-
+                            id(mppt_battery_save_status).publish_state("ACK received; verifying readback");
+                            id(mppt_battery_fc10_pending) = false;
+                            // Request an immediate readback of the battery configuration.
+                            const uint8_t req[8] = {0x01,0x03,0x15,0x00,0x00,0x22,0xC1,0xDF};
+                            id(rs485_direction_output).turn_on();
+                            delay(2);
+                            id(rs485_uart).write_array(req, sizeof(req));
+                            id(rs485_uart).flush();
+                            delayMicroseconds(175);
+                            id(rs485_direction_output).turn_off();
+                        - delay: 450ms
+                        - lambda: |-
+                            if (!id(mppt_battery_fc10_readback_done)) {
+                              id(mppt_battery_save_status).publish_state("Failed: readback timeout");
+                              ESP_LOGW("mppt_fc10", "Readback timed out");
+                            }
+                      else:
+                        - lambda: |-
+                            if (id(mppt_battery_fc10_pending))
+                              id(mppt_battery_save_status).publish_state("Failed: FC10 acknowledgment timeout");
+                            id(mppt_battery_fc10_pending) = false;
+                  - lambda: |-
+                      // Always release write authorization and the Modbus bus lock.
+                      id(mppt_battery_fc10_verify) = false;
+                      id(mppt_battery_fc10_pending) = false;
+                      id(mppt_battery_fc10_busy) = false;
+                else:
+                  - lambda: 'ESP_LOGW("mppt_fc10", "Battery save blocked by validation");'
+          else:
+            - lambda: |-
+                id(mppt_battery_save_status).publish_state("Blocked: waiting for fresh MPPT data or bus idle");
+                ESP_LOGW("mppt_fc10", "Battery save blocked: controller not ready");
+
+  # Temperature-unit control. FC10 single-register write to 0x1512.
+  # The unit register is documented from the OEM capture; the FC10 write
+  # for this specific setting still requires confirmation on the controller.
+  - id: mppt_set_temperature_unit
+    mode: single
+    parameters:
+      fahrenheit: bool
+    then:
+      # Wait for the regular Modbus poll to finish instead of dropping the selection.
+      - wait_until:
+          condition:
+            lambda: 'return !id(mppt_poll_busy) && !id(mppt_battery_fc10_busy) && !id(mppt_load_busy) && !id(mppt_write_pending) && !id(mppt_temp_busy);'
+          timeout: 5s
+      - if:
+          condition:
+            lambda: 'return id(mppt_battery_read_valid) && !id(mppt_temp_busy) && !id(mppt_load_busy) && !id(mppt_poll_busy) && !id(mppt_battery_fc10_busy) && !id(mppt_write_pending);'
+          then:
+            - lambda: |-
+                id(mppt_temp_busy) = true;
+                id(mppt_temp_pending) = true;
+                id(mppt_temp_ack) = false;
+                id(mppt_temp_target) = fahrenheit ? 1 : 0;
+                uint8_t frame[11] = {0x01,0x10,0x15,0x12,0x00,0x01,0x02,0x00,
+                                     uint8_t(fahrenheit ? 1 : 0),0,0};
+                uint16_t crc = 0xFFFF;
+                for (int i = 0; i < 9; ++i) {
+                  crc ^= frame[i];
+                  for (int b = 0; b < 8; ++b)
+                    crc = (crc & 1) ? (crc >> 1) ^ 0xA001 : crc >> 1;
+                }
+                frame[9] = crc & 0xFF;
+                frame[10] = crc >> 8;
+                id(rs485_direction_output).turn_on();
+                delay(2);
+                id(rs485_uart).write_array(frame, sizeof(frame));
+                id(rs485_uart).flush();
+                delayMicroseconds(175);
+                id(rs485_direction_output).turn_off();
+                ESP_LOGI("mppt_temp", "FC10 requested temperature unit: %s", fahrenheit ? "F" : "C");
+            - delay: 400ms
+            - if:
+                condition:
+                  lambda: 'return id(mppt_temp_ack);'
+                then:
+                  - lambda: |-
+                      const uint8_t req[8] = {0x01,0x03,0x15,0x00,0x00,0x22,0xC1,0xDF};
+                      id(rs485_direction_output).turn_on();
+                      delay(2);
+                      id(rs485_uart).write_array(req, sizeof(req));
+                      id(rs485_uart).flush();
+                      delayMicroseconds(175);
+                      id(rs485_direction_output).turn_off();
+                  - delay: 450ms
+                else:
+                  - lambda: 'ESP_LOGW("mppt_temp", "Temperature unit FC10 ACK missing: controller may have rejected write or response was lost");'
+            - lambda: |-
+                id(mppt_temp_pending) = false;
+                id(mppt_temp_busy) = false;
+          else:
+            - lambda: 'ESP_LOGW("mppt_temp", "Temperature unit write not sent: controller data unavailable or bus remained busy for 5s");'
+
+  # FC10 single-register load mode write, as observed in the OEM app capture.
+  - id: mppt_set_load
+    mode: single
+    parameters:
+      enable: bool
+    then:
+      - if:
+          condition:
+            lambda: 'return id(mppt_battery_read_valid) && !id(mppt_load_busy) && !id(mppt_temp_busy) && !id(mppt_poll_busy) && !id(mppt_battery_fc10_busy) && !id(mppt_write_pending) && !id(mppt_temp_busy);'
+          then:
+            - lambda: |-
+                id(mppt_load_busy) = true;
+                id(mppt_load_ack) = false;
+                id(mppt_load_pending) = true;
+                id(mppt_load_target) = enable ? 0x13FC : 0x13FD;
+                uint8_t frame[11] = {0x01,0x10,0x15,0x13,0x00,0x01,0x02,0x13,
+                                     uint8_t(enable ? 0xFC : 0xFD),0,0};
+                uint16_t crc = 0xFFFF;
+                for (int i = 0; i < 9; ++i) {
+                  crc ^= frame[i];
+                  for (int b = 0; b < 8; ++b)
+                    crc = (crc & 1) ? (crc >> 1) ^ 0xA001 : crc >> 1;
+                }
+                frame[9] = crc & 0xFF;
+                frame[10] = crc >> 8;
+                id(rs485_direction_output).turn_on();
+                delay(2);
+                id(rs485_uart).write_array(frame, sizeof(frame));
+                id(rs485_uart).flush();
+                delayMicroseconds(175);
+                id(rs485_direction_output).turn_off();
+                ESP_LOGI("mppt_load", "FC10 load mode write requested: %s", enable ? "ON" : "OFF");
+            - delay: 400ms
+            - if:
+                condition:
+                  lambda: 'return id(mppt_load_ack);'
+                then:
+                  - lambda: |-
+                      // Immediate FC03 readback; existing parser updates switch from 0x1514.
+                      const uint8_t req[8] = {0x01,0x03,0x15,0x00,0x00,0x22,0xC1,0xDF};
+                      id(rs485_direction_output).turn_on();
+                      delay(2);
+                      id(rs485_uart).write_array(req, sizeof(req));
+                      id(rs485_uart).flush();
+                      delayMicroseconds(175);
+                      id(rs485_direction_output).turn_off();
+                  - delay: 450ms
+                else:
+                  - lambda: 'ESP_LOGW("mppt_load", "FC10 load ACK timeout/rejected; state unchanged until poll");'
+            - lambda: |-
+                id(mppt_load_pending) = false;
+                id(mppt_load_busy) = false;
+          else:
+            - lambda: 'ESP_LOGW("mppt_load", "Load command blocked: controller not ready or bus busy");'
+
+  - id: mppt_poll_readonly
+    mode: single
+    then:
+      - if:
+          condition:
+            lambda: 'return !id(mppt_battery_fc10_busy) && !id(mppt_poll_busy) && !id(mppt_load_busy) && !id(mppt_temp_busy);'
+          then:
+            - lambda: 'id(mppt_poll_busy) = true;'
+            - script.execute: mppt_poll_readonly_locked
+
+  - id: mppt_poll_readonly_locked
+    mode: single
+    then:
+      - lambda: |-
+          ESP_LOGI("mppt_poll", "Reading 0x1500 (34 registers)");
+          const uint8_t req[8] = {0x01,0x03,0x15,0x00,0x00,0x22,0xC1,0xDF};
+          id(rs485_direction_output).turn_on();
+          delay(2);
+          id(rs485_uart).write_array(req, sizeof(req));
+          id(rs485_uart).flush();
+          delayMicroseconds(175);
+          id(rs485_direction_output).turn_off();
+      - delay: 400ms
+      - lambda: |-
+          ESP_LOGI("mppt_poll", "Reading 0x1600 (43 registers)");
+          const uint8_t req[8] = {0x01,0x03,0x16,0x00,0x00,0x2B,0x01,0x9D};
+          id(rs485_direction_output).turn_on();
+          delay(2);
+          id(rs485_uart).write_array(req, sizeof(req));
+          id(rs485_uart).flush();
+          delayMicroseconds(175);
+          id(rs485_direction_output).turn_off();
+      - delay: 400ms
+      - lambda: 'id(mppt_poll_busy) = false;'
+
+interval:
+  - interval: 10s
+    then:
+      - script.execute: mppt_poll_readonly
