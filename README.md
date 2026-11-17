@@ -25,10 +25,24 @@ Community-developed ESPHome firmware and a Home Assistant dashboard for an ECO-W
 | [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | Common control, BLE, UI and UART problems |
 | [docs/RESEARCH_NOTES.md](docs/RESEARCH_NOTES.md) | Historical investigation transcript; superseded conclusions may appear |
 
+## Hardware compatibility
+
+| Controller / host | Status | Notes |
+| --- | --- | --- |
+| ECO-WORTHY MPPT **60A** | **Tested on one installation** | Captured protocol and working ESP32-S3 firmware/dashboard |
+| ECO-WORTHY MPPT **40A** | **Untested candidate** | May share the same Modbus protocol; do not assume register addresses, values or writes match until verified |
+| ESP32-S3 + RS485 transceiver | **Current supplied firmware** | Wi-Fi + integrated JK BMS Bluetooth monitoring |
+| **RP2350 + Ethernet + RS485** | **Feasible, not yet ported/tested** | ESPHome supports RP2350 and SPI Ethernet; must replace ESP32-specific BLE/JK blocks and adapt UART/pins/config |
+| Raspberry Pi running Linux + USB/serial RS485 | **Possible alternate architecture, not supported by this YAML** | Requires a different Modbus/HA integration or custom service; ESPHome firmware cannot simply run on a Linux Pi |
+
+**An ESP32 is not inherently required for the MPPT's Modbus protocol.** An RP2350, or another capable Modbus RTU client, can communicate over RS485. However, the exact included YAML **does require ESP32-S3** because it uses ESP32-specific configuration and JK BMS BLE. Do not flash the ESP32 YAML to an RP2350 unchanged. An Ethernet module by itself is not an RS485 interface; an RS485 transceiver is also required. Model compatibility is distinct from host compatibility.
+
+See [hardware compatibility and future RP2350 port notes](docs/COMPATIBILITY.md).
+
 ## Dependencies
 
-### Hardware (required for the supplied active-master firmware)
-- **ECO-WORTHY MPPT 60 A** controller with the observed RS485 Modbus RTU interface
+### Hardware (required for the supplied ESP32-S3 firmware)
+- **ECO-WORTHY MPPT 60 A** controller with the observed RS485 Modbus RTU interface (40A model not tested)
 - **ESP32-S3** board supported by ESPHome (example target: esp32-s3-devkitc-1)
 - **3.3 V RS485 transceiver** wired to the ESP32 UART and driver-enable output
 - Compatible power supply, RS485 wiring and Wi-Fi
